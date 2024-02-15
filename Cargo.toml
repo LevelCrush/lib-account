@@ -1,15 +1,14 @@
-[workspace]
-members = [
-    "./lib-levelcrush-macros",
-    "./lib-levelcrush",
-    "./lib-destiny",
-    "./service-accounts",
-    "./service-destiny",
-]
-resolver = "2"
+[package]
+name = "lib-account"
+version = "1.0.0"
+edition = "2021"
 
-[workspace.dependencies]
-tokio = { version = "1.25.0", features = ["full", "tracing"] }
+[lib]
+doctest=false
+
+
+[dependencies]
+levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", tag = "1.0.2" }
 serde = { version = "1.0.171", features = ["derive"] }
 serde_json = { version = "1.0.103" }
 serde_urlencoded = { version = "0.7.1" }
@@ -22,22 +21,3 @@ sqlx = { version = "0.7.1", features = [
     "macros",
     "chrono",
 ], default_features = false }
-bigdecimal = { version = "0.3.1", features = ["serde"] } # compat with sqlx
-chrono = { version = "0.4.26", features = ["serde", "default"] }
-tracing = { version = "0.1.37", features = ["log"] }
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-dotenvy = "0.15.7"
-dotenvy_macro = "0.15.7"
-anyhow = "1.0.72"
-uuid = { version = "1.4.1", features = ["v4", "fast-rng"] }
-tracing-test = "0.2.4"
-rand = "0.8.5"
-futures = "0.3.28"
-reqwest = { version = "0.11.18", features = [
-    "json",
-    "rustls-tls",
-], default_features = false }
-clap = { version = "4.3.17", features = ["derive"] }
-md5 = { version = "0.7.0" }
-base64 = { version = "0.21.0" }
-urlencoding = { version = "2.1.2" }
