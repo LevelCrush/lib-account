@@ -1,0 +1,62 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n    account_platforms.*\nFROM account_platforms  \nWHERE account_platforms.id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "account",
+        "ordinal": 1,
+        "type_info": "Int64"
+      },
+      {
+        "name": "token",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "platform",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "platform_user",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Int64"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Int64"
+      },
+      {
+        "name": "deleted_at",
+        "ordinal": 7,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "455aac457a7f3a399634c03b5d545edab25b5004a55112e87d13df5d395efbd2"
+}

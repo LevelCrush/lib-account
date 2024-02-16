@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT \n    accounts.*\nFROM account_platforms\nINNER JOIN accounts ON account_platforms.account = accounts.id AND accounts.deleted_at = 0\nWHERE account_platforms.platform = ?\nAND account_platforms.platform_user = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Int64"
+      },
+      {
+        "name": "token",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "token_secret",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "timezone",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "admin",
+        "ordinal": 4,
+        "type_info": "Int64"
+      },
+      {
+        "name": "last_login_at",
+        "ordinal": 5,
+        "type_info": "Int64"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 6,
+        "type_info": "Int64"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 7,
+        "type_info": "Int64"
+      },
+      {
+        "name": "deleted_at",
+        "ordinal": 8,
+        "type_info": "Int64"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "5cc908e638727568686a83f8eeed3d9a764d922405553b30ef453e0eaed6cd01"
+}

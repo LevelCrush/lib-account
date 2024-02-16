@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "WITH\nsource_platform AS (\n    SELECT\n        account_platforms.*\n    FROM account_platform_data\n    INNER JOIN account_platforms ON\n        account_platform_data.platform = account_platforms.id AND\n        account_platforms.platform = 'discord'\n    WHERE account_platform_data.key = 'username'\n    AND account_platform_data.value = ?\n    ORDER BY account_platforms.updated_at DESC\n    LIMIT 1\n),\ndiscord_data AS (\n    SELECT\n        source_platform.account,\n        source_platform.id AS platform,\n        displayname_data.value AS display_name,\n        username_data.value AS username\n    FROM source_platform\n    INNER JOIN account_platform_data AS displayname_data ON\n        source_platform.id = displayname_data.platform AND\n        source_platform.account = displayname_data.account AND\n        displayname_data.key = 'display_name'\n    INNER JOIN account_platform_data AS username_data ON\n        source_platform.id = username_data.platform AND\n        source_platform.account = username_data.account AND\n        username_data.key = 'username'\n),\nbungie_data AS (\n    SELECT\n        source_platform.account AS account,\n        membership_data.platform AS platform,\n        membership_data.value AS display_name\n    FROM source_platform\n    INNER JOIN account_platforms AS bungie_platform ON\n        source_platform.account = bungie_platform.account AND\n        bungie_platform.platform = 'bungie'\n    INNER JOIN account_platform_data AS membership_data ON\n        bungie_platform.id = membership_data.platform AND\n        bungie_platform.account = membership_data.account AND\n        membership_data.key = 'unique_name'\n),\ntwitch_data AS (\n    SELECT\n        account_platforms.account AS account,\n        membership_data.platform AS platform,\n        membership_data.value AS display_name\n    FROM source_platform\n    INNER JOIN account_platforms ON\n        source_platform.account = account_platforms.account AND\n        account_platforms.platform = 'twitch'\n    INNER JOIN account_platform_data AS membership_data ON\n        account_platforms.id = membership_data.platform AND\n        account_platforms.account = membership_data.account AND\n        membership_data.key = 'display_name'\n)\nSELECT\n    accounts.token AS account_token,\n    discord_data.username AS username,\n    discord_data.display_name AS discord,\n    COALESCE(bungie_data.display_name, '') AS bungie,\n    COALESCE(twitch_data.display_name, '') AS twitch\nFROM source_platform\nINNER JOIN accounts ON source_platform.account = accounts.id\nINNER JOIN discord_data ON\n    accounts.id = discord_data.account  AND\n    source_platform.id = discord_data.platform\nLEFT JOIN bungie_data ON accounts.id = bungie_data.account\nLEFT JOIN twitch_data ON accounts.id = twitch_data.account\n",
+  "describe": {
+    "columns": [
+      {
+        "name": "account_token",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "username",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "discord",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "bungie",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "twitch",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6a96ddc254bdf138d1a2986a09c7116b1fe9af4318b9f32a8715f4a2f9a2531a"
+}

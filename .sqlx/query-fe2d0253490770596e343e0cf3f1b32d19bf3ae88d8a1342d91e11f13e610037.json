@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE account_platforms\nSET \n    account = ?,\n    updated_at = ?\nWHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "fe2d0253490770596e343e0cf3f1b32d19bf3ae88d8a1342d91e11f13e610037"
+}
