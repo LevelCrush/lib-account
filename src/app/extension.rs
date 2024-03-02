@@ -6,10 +6,9 @@ use levelcrush::{
     alias::UnixTimestamp, cache::MemoryCache, database, reqwest, retry_lock::RetryLock, tracing,
     uuid::Uuid,
 };
-use sqlx::SqlitePool;
+
 #[derive(Clone, Debug)]
-pub struct AppState {
-    pub database: SqlitePool,
+pub struct AccountExtension {
     pub http_client: reqwest::Client,
     pub profiles: MemoryCache<ProfileView>,
     pub mass_searches: MemoryCache<Vec<AccountLinkedPlatformsResult>>,
@@ -19,26 +18,16 @@ pub struct AppState {
     pub guard: RetryLock,
 }
 
-impl AppState {
+impl AccountExtension {
     /// Construct an app state
     ///
     /// Note: This will create a new database pool as well as a new bungie client
-    pub async fn new() -> AppState {
-        let max_connections = std::env::var("DATABASE_CONNECTIONS_MAX")
-            .unwrap_or_default()
-            .parse::<u32>()
-            .unwrap_or(1);
-
-        tracing::info!("Connecting to database with {max_connections} connection(s)");
-        let database = database::connect(crate::database::DATABASE_URL, max_connections).await;
-        tracing::info!("Connection to database established");
-
+    pub fn new() -> AccountExtension {
         let http_client = reqwest::ClientBuilder::new()
             .build()
             .expect("Failed to initialize TLS or get system configuration");
 
-        AppState {
-            database,
+        AccountExtension {
             http_client,
             profiles: MemoryCache::new(),
             mass_searches: MemoryCache::new(),
