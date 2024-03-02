@@ -11,7 +11,7 @@ members = ["migration", "."]
 
 [workspace.dependencies]
 migration = { path = "migration" }
-levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", rev = "a2c1630b84" }
+levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", rev = "85a92addcd" }
 
 serde = { version = "1.0.171", features = ["derive"] }
 serde_json = { version = "1.0.103" }

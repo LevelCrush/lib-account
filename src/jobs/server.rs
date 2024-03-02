@@ -32,7 +32,7 @@ pub async fn run(db_core_connections: u32, db_app_connections: u32) -> anyhow::R
 
     let global_process = app.process("server").await?;
     global_process
-        .log(LogLevel::Info, "Loading application settings", None)
+        .log_info("Loading application settings")
         .await;
 
     let mut app_settings = ApplicationSettings::load(&app).await?;
@@ -44,11 +44,7 @@ pub async fn run(db_core_connections: u32, db_app_connections: u32) -> anyhow::R
         .unwrap_or(3001);
 
     global_process
-        .log(
-            LogLevel::Info,
-            "Setting up cache prune task for account service",
-            None,
-        )
+        .log_info("Setting up cache prune task for account service")
         .await;
 
     let mut app_state_bg = app_state.clone();
@@ -64,7 +60,7 @@ pub async fn run(db_core_connections: u32, db_app_connections: u32) -> anyhow::R
     });
 
     let msg = format!("Running server on port {server_port}");
-    global_process.log(LogLevel::Info, &msg, None);
+    global_process.log_info(&msg).await;
 
     (_, _) = tokio::join!(
         Server::new(server_port)
