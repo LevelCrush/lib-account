@@ -6,11 +6,23 @@ edition = "2021"
 [lib]
 doctest = false
 
+[workspace]
+members = ["migration", "."]
 
-[dependencies]
+[workspace.dependencies]
+migration = { path = "migration" }
 levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", tag = "preview-2.1.0" }
 serde = { version = "1.0.171", features = ["derive"] }
 serde_json = { version = "1.0.103" }
 serde_urlencoded = { version = "0.7.1" }
 serde_repr = { version = "0.1.14" }
 serde_yaml = { version = "0.9.25" }
+
+[dependencies]
+migration = { workspace = true }
+levelcrush = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_urlencoded = { workspace = true }
+serde_repr = { workspace = true }
+serde_yaml = { workspace = true }
