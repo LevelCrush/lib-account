@@ -8,7 +8,7 @@ doctest = false
 
 
 [dependencies]
-levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", tag = "preview-2.0.0" }
+levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", tag = "preview-2.1.0" }
 serde = { version = "1.0.171", features = ["derive"] }
 serde_json = { version = "1.0.103" }
 serde_urlencoded = { version = "0.7.1" }
