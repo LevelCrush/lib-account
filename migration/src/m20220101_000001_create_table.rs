@@ -35,8 +35,12 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(false),
                     )
-                    .col(ColumnDef::new(Accounts::Timezone).not_null())
-                    .col(ColumnDef::new(Accounts::LastLoginAt).big_integer())
+                    .col(ColumnDef::new(Accounts::Timezone).string_len(32).not_null())
+                    .col(
+                        ColumnDef::new(Accounts::LastLoginAt)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Accounts::CreatedAt).big_integer().not_null())
                     .col(ColumnDef::new(Accounts::UpdatedAt).big_integer().not_null())
                     .col(ColumnDef::new(Accounts::DeletedAt).big_integer().not_null())
@@ -46,8 +50,7 @@ impl MigrationTrait for Migration {
                             .name("accounts-token-tokensecret")
                             .table(Accounts::Table)
                             .col(Accounts::Token)
-                            .col(Accounts::TokenSecret)
-                            .unique(),
+                            .col(Accounts::TokenSecret),
                     )
                     .index(
                         Index::create()
@@ -58,7 +61,7 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await;
+            .await?;
 
         manager
             .create_table(
@@ -72,7 +75,12 @@ impl MigrationTrait for Migration {
                             .primary_key()
                             .auto_increment(),
                     )
-                    .col(ColumnDef::new(AccountPlatforms::Platform).text().not_null())
+                    .col(ColumnDef::new(AccountPlatforms::Platform).string_len(32).not_null())
+                    .col(
+                        ColumnDef::new(AccountPlatforms::Account)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(AccountPlatforms::Token)
                             .char_len(32)
@@ -119,9 +127,10 @@ impl MigrationTrait for Migration {
                         ForeignKey::create()
                             .from(AccountPlatforms::Table, AccountPlatforms::Account)
                             .to(Accounts::Table, Accounts::Id),
-                    ),
+                    )
+                    .to_owned(),
             )
-            .await;
+            .await?;
 
         manager
             .create_table(
@@ -150,6 +159,21 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(AccountPlatformData::Value).text().not_null())
+                    .col(
+                        ColumnDef::new(AccountPlatformData::CreatedAt)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(AccountPlatformData::UpdatedAt)
+                            .big_integer()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(AccountPlatformData::DeletedAt)
+                            .big_integer()
+                            .not_null(),
+                    )
                     .index(
                         Index::create()
                             .name("apdata-account-platform")
@@ -195,11 +219,11 @@ impl MigrationTrait for Migration {
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         manager
             .drop_table(Table::drop().table(AccountPlatformData::Table).to_owned())
-            .await;
+            .await?;
 
         manager
             .drop_table(Table::drop().table(AccountPlatforms::Table).to_owned())
-            .await;
+            .await?;
 
         manager
             .drop_table(Table::drop().table(Accounts::Table).to_owned())
