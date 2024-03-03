@@ -11,7 +11,15 @@ members = ["migration", "."]
 
 [workspace.dependencies]
 migration = { path = "migration" }
-levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", rev = "85a92addcd" }
+sea-orm = { version = "0.12", features = [
+    "sqlx-mysql",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-bigdecimal",
+    "with-chrono",
+    "with-uuid",
+] }
+levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", rev = "11c04ad434" }
 
 serde = { version = "1.0.171", features = ["derive"] }
 serde_json = { version = "1.0.103" }
@@ -22,6 +30,7 @@ serde_yaml = { version = "0.9.25" }
 [dependencies]
 migration = { workspace = true }
 levelcrush = { workspace = true }
+sea-orm = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = { workspace = true }

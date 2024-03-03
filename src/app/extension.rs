@@ -1,7 +1,4 @@
-use crate::{
-    database::account::AccountLinkedPlatformsResult, routes::profile::ProfileView,
-    sync::discord::MemberSyncResult,
-};
+use crate::{routes::profile::ProfileView, sync::discord::MemberSyncResult};
 use levelcrush::{
     alias::UnixTimestamp, cache::MemoryCache, database, reqwest, retry_lock::RetryLock, tracing,
     uuid::Uuid,

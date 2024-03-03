@@ -43,6 +43,23 @@ pub async fn run(db_core_connections: u32, db_app_connections: u32) -> anyhow::R
         .parse::<u16>()
         .unwrap_or(3001);
 
+    let server_secret = app_settings.get_global("server.secret").unwrap_or_default();
+
+    // save these two settings into our application settings. This will ensure they are created properly.
+
+    let sp_setting = server_port.to_string();
+    let sp_req = app_settings.set_global("server.port", &sp_setting).await?;
+    let ss_req = app_settings
+        .set_global("server.secret", &server_secret)
+        .await?;
+
+    sp_req.await;
+    ss_req.await;
+
+    if server_secret.is_empty() {
+        panic!("Please set a server secret");
+    }
+
     global_process
         .log_info("Setting up cache prune task for account service")
         .await;
@@ -65,7 +82,7 @@ pub async fn run(db_core_connections: u32, db_app_connections: u32) -> anyhow::R
     (_, _) = tokio::join!(
         Server::new(server_port)
             .enable_cors()
-            .enable_session()
+            .enable_session(&server_secret)
             .run(routes::router(), app_state.clone()),
         cache_task
     );
