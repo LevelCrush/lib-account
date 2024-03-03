@@ -1,8 +1,10 @@
 use levelcrush::app::ApplicationState;
+use levelcrush::project_str;
 use levelcrush::{database, md5, util::unix_timestamp};
 use sea_orm::{
-    self, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, EntityTrait, FromQueryResult,
-    JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
+    self, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseBackend, EntityTrait,
+     FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Select,
+    Statement, Value, Values,
 };
 use std::collections::HashMap;
 
@@ -144,38 +146,40 @@ pub async fn all_data(
 
 pub async fn by_bungie_bulk(
     bungie_ids: &[String],
-    state: ApplicationState<AccountExtension>,
+    state: &ApplicationState<AccountExtension>,
 ) -> Vec<AccountLinkedPlatformsResult> {
-    /*
     let prepared_pos = vec!["?"; bungie_ids.len()].join(",");
-    let statement = project_str!("queries/account_search_by_bungie_bulk.sql", prepared_pos);
-    let mut query_builder = sqlx::query_as::<_, AccountLinkedPlatformsResult>(statement.as_str());
+    let mut binds = Vec::with_capacity(bungie_ids.len() + 1);
     for bungie_id in bungie_ids.iter() {
-        query_builder = query_builder.bind(bungie_id);
+        binds.push(Value::String(Some(Box::new(bungie_id.clone()))));
     }
 
-    let query = query_builder.fetch_all(pool).await;
+    let query = AccountLinkedPlatformsResult::find_by_statement(Statement::from_sql_and_values(
+        sea_orm::DatabaseBackend::MySql,
+        project_str!("queries/account_search_by_bungie_bulk.sql", prepared_pos),
+        binds,
+    ))
+    .all(&state.database)
+    .await;
+
     if let Ok(query) = query {
         query
     } else {
         database::log_error(query);
         Vec::new()
     }
-     */
-    Vec::new()
 }
 
 pub async fn by_bungie(
     bungie_id: String,
     state: &ApplicationState<AccountExtension>,
 ) -> Option<AccountLinkedPlatformsResult> {
-    /*
-    let query = sqlx::query_file_as!(
-        AccountLinkedPlatformsResult,
-        "queries/account_search_by_bungie.sql",
-        bungie_id
-    )
-    .fetch_optional(pool)
+    let query = AccountLinkedPlatformsResult::find_by_statement(Statement::from_sql_and_values(
+        DatabaseBackend::MySql,
+        project_str!("queries/account_search_by_bungie.sql"),
+        vec![Value::String(Some(Box::new(bungie_id)))],
+    ))
+    .one(&state.database)
     .await;
 
     if let Ok(query) = query {
@@ -184,21 +188,18 @@ pub async fn by_bungie(
         database::log_error(query);
         None
     }
-     */
-    None
 }
 
 pub async fn by_discord(
     discord_handle: String,
     state: &ApplicationState<AccountExtension>,
 ) -> Option<AccountLinkedPlatformsResult> {
-    /*
-    let query = sqlx::query_file_as!(
-        AccountLinkedPlatformsResult,
-        "queries/account_search_by_discord.sql",
-        discord_handle
-    )
-    .fetch_optional(pool)
+    let query = AccountLinkedPlatformsResult::find_by_statement(Statement::from_sql_and_values(
+        DatabaseBackend::MySql,
+        project_str!("queries/account_search_by_discord.sql"),
+        vec![Value::String(Some(Box::new(discord_handle)))],
+    ))
+    .one(&state.database)
     .await;
 
     if let Ok(query) = query {
@@ -207,6 +208,4 @@ pub async fn by_discord(
         database::log_error(query);
         None
     }
-     */
-    None
 }

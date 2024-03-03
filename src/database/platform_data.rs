@@ -1,57 +1,45 @@
+use crate::app::extension::AccountExtension;
 use crate::database::platform::AccountPlatform;
+use crate::entities::{account_platform_data, account_platforms, accounts};
+use levelcrush::app::ApplicationState;
 use levelcrush::database;
-use levelcrush::macros::{DatabaseRecord, DatabaseResult};
 use levelcrush::util::unix_timestamp;
 use levelcrush::{alias::RecordId, project_str, tracing};
-use sqlx::SqlitePool;
+use sea_orm::{ColumnTrait, Condition, EntityTrait, FromQueryResult, QueryFilter};
 use std::collections::HashMap;
 
-#[DatabaseRecord]
-pub struct AccountPlatformData {
-    pub account: RecordId,
-    pub platform: RecordId,
-    pub key: String,
-    pub value: String,
-}
-
-#[DatabaseResult]
-struct AccountPlatformDataSlim {
-    pub id: RecordId,
+#[derive(Clone, Debug, FromQueryResult)]
+pub struct AccountPlatformDataSlim {
+    pub id: String,
     pub key: String,
 }
 
-#[DatabaseResult]
-pub struct NewAccountPlatformData {
-    pub key: String,
-    pub value: String,
-}
-
-pub async fn read(account_platform: &AccountPlatform, keys: &[&str], pool: &SqlitePool) -> HashMap<String, RecordId> {
+pub async fn read(
+    account_platform: &AccountPlatform,
+    keys: &[&str],
+    state: &ApplicationState<AccountExtension>,
+) -> HashMap<String, RecordId> {
     let mut results = HashMap::new();
-
-    //sqlx/mysql does not allow us to pass an vector into a prepared statement, so we must manually construct a prepared statement and bind manually
-    let mut in_parameters = Vec::new();
     for key in keys.iter() {
-        in_parameters.push("?");
         results.insert(key.to_string(), 0);
     }
 
-    // insert the prepared parameters into the query string now
-    let in_parameters = in_parameters.join(",");
-    //let query = format!(project_str!("queries/account_platform_data_read.sql"), in_parameters);
-    let query = project_str!("queries/account_platform_data_read.sql", in_parameters);
+    // convert to vector
+    let keys = keys.to_vec();
 
-    // start constructing the query
-    let mut query_builder = sqlx::query_as::<_, AccountPlatformDataSlim>(query.as_str())
-        .bind(account_platform.account)
-        .bind(account_platform.id);
+    let query_result = account_platform_data::Entity::find()
+        .filter(
+            Condition::all()
+                .add(accounts::Column::Id.eq(account_platform.account))
+                .add(
+                    account_platforms::Column::Id
+                        .eq(account_platform.id)
+                        .add(account_platform_data::Column::Key.is_in(keys)),
+                ),
+        )
+        .all(&state.database)
+        .await;
 
-    for key in keys.iter() {
-        query_builder = query_builder.bind(key);
-    }
-
-    // execute the query
-    let query_result = query_builder.fetch_all(pool).await;
     if query_result.is_ok() {
         let query_result = query_result.unwrap_or_default();
         for record in query_result.iter() {
@@ -60,13 +48,16 @@ pub async fn read(account_platform: &AccountPlatform, keys: &[&str], pool: &Sqli
                 .and_modify(|record_id| *record_id = record.id);
         }
     } else {
-        let err = query_result.err().unwrap();
-        tracing::error!("Read Platform Data Error: {}", err);
+        database::log_error(query_result);
     }
     results
 }
 
-pub async fn write(account_platform: &AccountPlatform, values: &[NewAccountPlatformData], pool: &SqlitePool) {
+pub async fn write(
+    account_platform: &AccountPlatform,
+    values: &[NewAccountPlatformData],
+    pool: &SqlitePool,
+) {
     // get all keys we need to work with and at the same time construct a hash map that represents the key/value pairs we want to link
     let mut keys = Vec::new();
     let mut value_map = HashMap::new();
