@@ -1,14 +1,14 @@
 use crate::app::extension::AccountExtension;
 use crate::database::account::Account;
-use crate::entities::{account_platforms, accounts};
+use crate::entities::{account_platform_data, account_platforms, accounts};
 use levelcrush::alias::RecordId;
 use levelcrush::app::ApplicationState;
 use levelcrush::util::unix_timestamp;
 use levelcrush::{database, md5};
 use migration::CaseStatementCondition;
 use sea_orm::{
-    ActiveValue, ColumnTrait, Condition, EntityTrait, Iterable, JoinType, QueryFilter, QuerySelect,
-    RelationTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, EntityTrait, Iterable, JoinType,
+    QueryFilter, QuerySelect, RelationTrait,
 };
 
 pub enum AccountPlatformType {
@@ -185,28 +185,24 @@ pub async fn read(
 /// Update the provied account platform record and returns a new updated account platform record
 pub async fn update(
     account_platform: &mut AccountPlatform,
-    pool: &SqlitePool,
+    state: &ApplicationState<AccountExtension>,
 ) -> Option<AccountPlatform> {
     // force the platform record to have an updated timestamp of modification
     account_platform.updated_at = unix_timestamp();
 
-    sqlx::query_file!(
-        "queries/account_platform_update.sql",
-        account_platform.account,
-        account_platform.updated_at,
-        account_platform.id
-    )
-    .execute(pool)
-    .await
-    .ok();
+    // this is absolutely redudant. Unfortuntaely due to how the code was PRE
+    // sea orm migration, this is the simplest and quickest solution to get the changes in
+    let mut active: account_platforms::ActiveModel = account_platform.clone().into();
+    active.account = ActiveValue::Set(account_platform.account);
+    active.updated_at = ActiveValue::Set(account_platform.updated_at);
 
-    let query = sqlx::query_file_as!(
-        AccountPlatform,
-        "queries/account_platform_get_by_id.sql",
-        account_platform.id,
-    )
-    .fetch_optional(pool)
-    .await;
+    // save into the database
+    // we literally dont care if it is able to make the save or not
+    let _ = active.save(&state.database).await;
+
+    let query = account_platforms::Entity::find_by_id(account_platform.id)
+        .one(&state.database)
+        .await;
 
     if let Ok(query) = query {
         query
@@ -218,21 +214,20 @@ pub async fn update(
 
 /// Unlink an account platfrom by directly deleting the related data tied to the account platform and then remove the account platform record itself as well
 /// This is a permanent operation
-pub async fn unlink(account_platform: &AccountPlatform, pool: &SqlitePool) {
-    // remove the account platform data first
-    sqlx::query_file!(
-        "queries/account_platform_data_unlink.sql",
-        account_platform.id
-    )
-    .execute(pool)
-    .await
-    .ok();
+pub async fn unlink(
+    account_platform: &AccountPlatform,
+    state: &ApplicationState<AccountExtension>,
+) {
+    // delete platform data first
+    let _ = account_platform_data::Entity::delete_many()
+        .filter(account_platform_data::Column::Platform.eq(account_platform.id))
+        .exec(&state.database)
+        .await;
 
     // remove the account platform now
-    sqlx::query_file!("queries/account_platform_unlink.sql", account_platform.id)
-        .execute(pool)
-        .await
-        .ok();
+    let _ = account_platforms::Entity::delete_by_id(account_platform.id)
+        .exec(&state.database)
+        .await;
 }
 
 pub async fn need_update(
