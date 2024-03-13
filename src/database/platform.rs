@@ -5,6 +5,7 @@ use levelcrush::alias::RecordId;
 use levelcrush::app::ApplicationState;
 use levelcrush::util::unix_timestamp;
 use levelcrush::{database, md5};
+use migration::CaseStatementCondition;
 use sea_orm::{
     ActiveValue, ColumnTrait, Condition, EntityTrait, Iterable, JoinType, QueryFilter, QuerySelect,
     RelationTrait,
@@ -160,17 +161,18 @@ pub async fn match_account(
 pub async fn read(
     platform_type: AccountPlatformType,
     platform_user: String,
-    pool: &SqlitePool,
+    state: &ApplicationState<AccountExtension>,
 ) -> Option<AccountPlatform> {
     let platform = platform_type.to_string();
-    let query_result = sqlx::query_file_as!(
-        AccountPlatform,
-        "queries/account_platform_read.sql",
-        platform,
-        platform_user
-    )
-    .fetch_optional(pool)
-    .await;
+
+    let query_result = account_platforms::Entity::find()
+        .filter(
+            Condition::all()
+                .add(account_platforms::Column::Platform.eq(&platform))
+                .add(account_platforms::Column::PlatformUser.eq(&platform_user)),
+        )
+        .one(&state.database)
+        .await;
 
     if let Ok(query_result) = query_result {
         query_result
