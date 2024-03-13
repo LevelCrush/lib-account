@@ -1,9 +1,14 @@
+use crate::app::extension::AccountExtension;
 use crate::database::account::Account;
+use crate::entities::{account_platforms, accounts};
 use levelcrush::alias::RecordId;
-use levelcrush::macros::DatabaseRecord;
+use levelcrush::app::ApplicationState;
 use levelcrush::util::unix_timestamp;
 use levelcrush::{database, md5};
-use sqlx::SqlitePool;
+use sea_orm::{
+    ActiveValue, ColumnTrait, Condition, EntityTrait, Iterable, JoinType, QueryFilter, QuerySelect,
+    RelationTrait,
+};
 
 pub enum AccountPlatformType {
     Discord,
@@ -27,14 +32,6 @@ impl std::fmt::Display for AccountPlatformType {
     }
 }
 
-#[DatabaseRecord]
-pub struct AccountPlatform {
-    pub account: RecordId,
-    pub token: String,
-    pub platform: String,
-    pub platform_user: String,
-}
-
 /// Required data inputs to generate a platform record
 pub struct NewAccountPlatform {
     pub account: RecordId,
@@ -42,10 +39,12 @@ pub struct NewAccountPlatform {
     pub platform_user: String,
 }
 
+pub type AccountPlatform = account_platforms::Model;
+
 /// Inserts a new accounts_platform record based on provided information.
 pub async fn create(
     new_platform: NewAccountPlatform,
-    pool: &SqlitePool,
+    state: &ApplicationState<AccountExtension>,
 ) -> Option<AccountPlatform> {
     let token_seed = format!(
         "{}||{}||{}",
@@ -58,27 +57,28 @@ pub async fn create(
     let platform_user = new_platform.platform_user;
     let timestamp = unix_timestamp();
 
-    let query_result = sqlx::query_file!(
-        "queries/account_platform_insert.sql",
-        new_platform.account,
-        token,
-        platform,
-        platform_user,
-        timestamp
-    )
-    .execute(pool)
-    .await;
+    let active = account_platforms::ActiveModel {
+        id: ActiveValue::NotSet,
+        platform: ActiveValue::Set(platform),
+        account: ActiveValue::Set(new_platform.account),
+        token: ActiveValue::Set(token),
+        platform_user: ActiveValue::Set(platform_user),
+        created_at: ActiveValue::Set(timestamp),
+        updated_at: ActiveValue::Set(0),
+        deleted_at: ActiveValue::Set(0),
+    };
+
+    let query_result = account_platforms::Entity::insert(active)
+        .exec(&state.database)
+        .await;
 
     // attempt to fetch the last inserted platform record
     if let Ok(query_result) = query_result {
-        let last_inserted_id = query_result.last_insert_rowid();
-        let platform_result = sqlx::query_file_as!(
-            AccountPlatform,
-            "queries/account_platform_get_by_id.sql",
-            last_inserted_id
-        )
-        .fetch_optional(pool)
-        .await;
+        let last_inserted_id = query_result.last_insert_id;
+
+        let platform_result = account_platforms::Entity::find_by_id(last_inserted_id)
+            .one(&state.database)
+            .await;
 
         if let Ok(platform_result) = platform_result {
             platform_result
@@ -96,18 +96,25 @@ pub async fn create(
 pub async fn from_account(
     account: &Account,
     platform_type: AccountPlatformType,
-    pool: &SqlitePool,
+    state: &ApplicationState<AccountExtension>,
 ) -> Option<AccountPlatform> {
     let platform = platform_type.to_string();
 
-    let query_result = sqlx::query_file_as!(
-        AccountPlatform,
-        "queries/account_platform_from_account.sql",
-        account.id,
-        platform
-    )
-    .fetch_optional(pool)
-    .await;
+    let query_result = account_platforms::Entity::find()
+        .select_only()
+        .columns(account_platforms::Column::iter())
+        .join(
+            JoinType::InnerJoin,
+            account_platforms::Relation::Accounts.def(),
+        )
+        .filter(
+            Condition::all()
+                .add(accounts::Column::Id.eq(account.id))
+                .add(account_platforms::Column::DeletedAt.eq(0))
+                .add(account_platforms::Column::Platform.eq(platform)),
+        )
+        .one(&state.database)
+        .await;
 
     if let Ok(query_result) = query_result {
         query_result
@@ -121,17 +128,25 @@ pub async fn from_account(
 pub async fn match_account(
     platform_user: String,
     platform_type: AccountPlatformType,
-    pool: &SqlitePool,
+    state: &ApplicationState<AccountExtension>,
 ) -> Option<Account> {
     let platform = platform_type.to_string();
-    let query_result = sqlx::query_file_as!(
-        Account,
-        "queries/account_platform_match_account.sql",
-        platform,
-        platform_user
-    )
-    .fetch_optional(pool)
-    .await;
+
+    let query_result = account_platforms::Entity::find()
+        .select_only()
+        .columns(accounts::Column::iter())
+        .join(
+            JoinType::InnerJoin,
+            account_platforms::Relation::Accounts.def(),
+        )
+        .filter(
+            Condition::all()
+                .add(account_platforms::Column::Platform.eq(&platform))
+                .add(account_platforms::Column::PlatformUser.eq(&platform_user)),
+        )
+        .into_model::<accounts::Model>()
+        .one(&state.database)
+        .await;
 
     if let Ok(query_result) = query_result {
         query_result
