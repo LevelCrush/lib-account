@@ -6,7 +6,8 @@ use levelcrush::database;
 use levelcrush::util::unix_timestamp;
 use levelcrush::{alias::RecordId, project_str, tracing};
 use sea_orm::{
-    ColumnTrait, Condition, EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Value,
+    ColumnTrait, Condition, ConnectionTrait, EntityTrait, FromQueryResult, QueryFilter,
+    QuerySelect, Statement, Value,
 };
 use std::collections::HashMap;
 
@@ -82,8 +83,6 @@ pub async fn write(
 
         query_parameters.push("(?,?,?,?,?,?,?)");
 
-    
-
         query_values.extend(
             vec![
                 Value::BigInt(Some(account_platform.account)),
@@ -98,25 +97,15 @@ pub async fn write(
         project_str!("queries/account_platform_data_insert.sql", query_parameters);
     //  pull in the existing data related   l to the specified account platform. We will use this to merge and figure out which are new or need to be updated
 
-    /*
-
-
-    let mut query_builder = sqlx::query(insert_statement.as_str());
-
-    for record in values.iter() {
-        // new record for sure bind parameters to match
-        query_builder = query_builder
-            .bind(account_platform.account)
-            .bind(account_platform.id)
-            .bind(record.key.clone())
-            .bind(record.value.clone())
-            .bind(unix_timestamp())
-            .bind(0)
-            .bind(0);
-    }
+    let query = state
+        .database
+        .execute(Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::MySql,
+            insert_statement,
+            query_values,
+        ))
+        .await;
 
     // finally execute the query to update/insert this data
-    let query = query_builder.execute(pool).await;
     database::log_error(query);
-     */
 }

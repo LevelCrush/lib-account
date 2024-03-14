@@ -3,7 +3,7 @@ use levelcrush::project_str;
 use levelcrush::{database, md5, util::unix_timestamp};
 use sea_orm::{
     self, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseBackend, EntityTrait,
-     FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Select,
+    FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Select,
     Statement, Value, Values,
 };
 use std::collections::HashMap;
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use crate::app::extension::AccountExtension;
 use crate::entities::{account_platform_data, account_platforms, accounts};
 
-#[derive(Clone, Debug, FromQueryResult)]
+#[derive(Clone, Debug, serde::Serialize, FromQueryResult)]
 pub struct AccountLinkedPlatformsResult {
     pub account_token: String,
     pub username: String,
@@ -20,7 +20,7 @@ pub struct AccountLinkedPlatformsResult {
     pub twitch: String,
 }
 
-#[derive(Clone, Debug, FromQueryResult)]
+#[derive(Clone, Debug, serde::Serialize, FromQueryResult)]
 pub struct AccountLinkedPlatformDataResult {
     pub platform: String,
     pub platform_user: i64,
