@@ -5,10 +5,9 @@ use levelcrush::alias::RecordId;
 use levelcrush::app::ApplicationState;
 use levelcrush::util::unix_timestamp;
 use levelcrush::{database, md5};
-use migration::CaseStatementCondition;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, EntityTrait, Iterable, JoinType,
-    QueryFilter, QuerySelect, RelationTrait,
+    ActiveModelTrait, ActiveValue, ColumnTrait, Condition, EntityTrait, FromQueryResult, Iterable,
+    JoinType, Order, QueryFilter, QueryOrder, QuerySelect, RelationTrait,
 };
 
 pub enum AccountPlatformType {
@@ -38,6 +37,11 @@ pub struct NewAccountPlatform {
     pub account: RecordId,
     pub platform: AccountPlatformType,
     pub platform_user: String,
+}
+
+#[derive(Debug, Clone, FromQueryResult)]
+struct AccountPlatformNeedUpdate {
+    pub discord_id: String,
 }
 
 pub type AccountPlatform = account_platforms::Model;
@@ -230,14 +234,22 @@ pub async fn unlink(
         .await;
 }
 
+/// todo: Determine if this function is even still relevant in the new setup
 pub async fn need_update(
     platform: AccountPlatformType,
     limit: i64,
-    pool: &SqlitePool,
+    state: &ApplicationState<AccountExtension>,
 ) -> Vec<String> {
     let platform = platform.to_string();
-    let query = sqlx::query_file!("queries/account_platform_need_update.sql", platform, limit)
-        .fetch_all(pool)
+
+    let query = account_platforms::Entity::find()
+        .select_only()
+        .column_as(account_platforms::Column::PlatformUser, "discord_id")
+        .filter(account_platforms::Column::Platform.eq(&platform))
+        .order_by(account_platforms::Column::UpdatedAt, Order::Asc)
+        .limit(limit as u64)
+        .into_model::<AccountPlatformNeedUpdate>()
+        .all(&state.database)
         .await;
 
     if let Ok(query) = query {
