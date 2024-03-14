@@ -19,7 +19,7 @@ sea-orm = { version = "0.12", features = [
     "with-chrono",
     "with-uuid",
 ] }
-levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", rev = "69646a9fec" }
+levelcrush = { git = "https://code.levelcrush.com/LevelCrush/lib-levelcrush.git", rev = "f38308a911" }
 
 serde = { version = "1.0.171", features = ["derive"] }
 serde_json = { version = "1.0.103" }
