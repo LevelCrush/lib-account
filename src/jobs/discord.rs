@@ -1,13 +1,14 @@
 use crate::{
-    app::{self, state::AppState},
+    app::{self, extension::AccountExtension},
     database::{self, platform::AccountPlatformType},
 };
 use levelcrush::{anyhow, tokio, tracing};
 use std::time::Duration;
 
 pub async fn run(args: &[String]) -> anyhow::Result<()> {
-    //todo!
-    let state = AppState::new().await;
+    let (app, mut state, _, mut global_process) =
+        AccountExtension::app_stack(1, 1, "discord-info").await?;
+
     let limit = {
         if !args.is_empty() {
             match args.first() {
@@ -19,10 +20,15 @@ pub async fn run(args: &[String]) -> anyhow::Result<()> {
         }
     };
 
-    let need_update = database::platform::need_update(AccountPlatformType::Discord, limit, &state.database).await;
+    let need_update =
+        database::platform::need_update(AccountPlatformType::Discord, limit, &state).await;
     for discord_id in need_update.into_iter() {
-        tracing::info!("Updating member: {}", discord_id);
+        //tracing::info!("Updating member: {}", discord_id);
+        let msg = format!("Updating member: {discord_id}");
+        let handle = global_process.log_info(&msg);
+
         app::discord::member(&discord_id, &state).await;
+        handle.await;
 
         // intentionally add a delay between each request of 100ms
         // this is a lazy and innaccurate way of making sure we dont exceed our

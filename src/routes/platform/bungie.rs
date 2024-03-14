@@ -1,17 +1,18 @@
+use crate::app::extension::AccountExtension;
 use crate::app::session::SessionKey;
-use crate::app::state::AppState;
+use crate::database::account;
 use crate::database::platform::{AccountPlatformType, NewAccountPlatform};
 use crate::database::platform_data::NewAccountPlatformData;
-use crate::env::AppVariable;
 use crate::routes::guards;
 use crate::routes::platform::{OAuthLoginQueries, OAuthLoginValidationQueries};
 use crate::routes::profile::CACHE_KEY_PROFILE;
-use crate::{app, database, env};
+use crate::{app, database};
 use axum::extract::{Query, State};
 use axum::response::Redirect;
 use axum::routing::get;
 use axum::Router;
 use axum_sessions::extractors::{ReadableSession, WritableSession};
+use levelcrush::app::ApplicationState;
 use levelcrush::tracing;
 use levelcrush::util::unix_timestamp;
 use levelcrush::{axum, reqwest};
@@ -126,7 +127,7 @@ fn get_membership_name(membership_type: i32) -> &'static str {
     }
 }
 
-pub fn router() -> Router<AppState> {
+pub fn router() -> Router<ApplicationState<AccountExtension>> {
     Router::new()
         .route("/login", get(login))
         .route("/validate", get(validate))
@@ -136,7 +137,7 @@ pub fn router() -> Router<AppState> {
 
 pub async fn unlink(
     Query(fields): Query<OAuthLoginQueries>,
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     session: ReadableSession,
 ) -> Redirect {
     //extract query fields
@@ -146,7 +147,7 @@ pub async fn unlink(
     let cache_key = format!("{}{}", CACHE_KEY_PROFILE, session_id);
 
     // make sure we know where to return our user to after they are done logging in
-    let final_fallback_url = env::get(AppVariable::ServerFallbackUrl);
+    let final_fallback_url = state.extension.fallback_url.clone();
     let final_redirect = query_fields.redirect.unwrap_or(final_fallback_url);
 
     // get account tied to session
@@ -156,56 +157,49 @@ pub async fn unlink(
         app::session::read::<String>(SessionKey::AccountSecret, &session).unwrap_or_default();
 
     // look up account in the database
-    let account = database::account::get(
-        session_account_token,
-        session_account_secret,
-        &state.database,
-    )
-    .await;
+    let account =
+        database::account::get(&session_account_token, &session_account_secret, &state).await;
 
     // find the account platform tied to this account.
     let mut account_platform = None;
     if account.is_some() {
         let account = account.unwrap();
-        account_platform = database::platform::from_account(
-            &account,
-            AccountPlatformType::Bungie,
-            &state.database,
-        )
-        .await;
+        account_platform =
+            database::platform::from_account(&account, AccountPlatformType::Bungie, &state).await;
     }
 
     // if we found it , we can go ahead and perform all of our unlink operations on it
     if account_platform.is_some() {
         let account_platform = account_platform.unwrap();
-        database::platform::unlink(&account_platform, &state.database).await;
+        database::platform::unlink(&account_platform, &state).await;
     }
 
     tracing::info!("Unlinking!");
     tracing::info!("Busting cache on profile at {}", cache_key);
-    state.profiles.delete(&cache_key).await;
+    state.extension.profiles.delete(&cache_key).await;
 
     let discord_username =
         app::session::read::<String>(SessionKey::Username, &session).unwrap_or_default();
     let search_cache_key = format!("search_discord||{}", discord_username);
     tracing::info!("Busting search key: {}", search_cache_key);
-    state.searches.delete(&search_cache_key).await;
+    state.extension.searches.delete(&search_cache_key).await;
 
     // Now redirect
     Redirect::temporary(final_redirect.as_str())
 }
 
 pub async fn login(
+    State(mut state): State<ApplicationState<AccountExtension>>,
     Query(login_fields): Query<OAuthLoginQueries>,
     mut session: WritableSession,
 ) -> Redirect {
     let query_fields = login_fields;
 
     // make sure we know where to return our user to after they are done logging in
-    let final_fallback_url = env::get(AppVariable::ServerFallbackUrl);
+    let final_fallback_url = state.extension.fallback_url;
     let final_redirect = query_fields.redirect.unwrap_or(final_fallback_url);
 
-    let client_id = env::get(AppVariable::BungieClientId);
+    let client_id = state.extension.bungie_client_id.clone();
     let hash_input = md5::compute(format!("{}||{}", client_id, unix_timestamp()));
     let bungie_state = format!("{:x}", hash_input);
     let authorize_url = format!(
@@ -233,14 +227,14 @@ pub async fn login(
 pub async fn validate(
     headers: HeaderMap,
     Query(validation_query): Query<OAuthLoginValidationQueries>,
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     session: ReadableSession,
 ) -> Redirect {
     let query_fields = validation_query;
 
     let session_id = session.id();
     let cache_key = format!("{}{}", CACHE_KEY_PROFILE, session_id);
-    let final_fallback_url = env::get(AppVariable::ServerFallbackUrl);
+    let final_fallback_url = state.extension.fallback_url;
     let final_redirect =
         app::session::read::<String>(SessionKey::PlatformBungieCallerUrl, &session)
             .unwrap_or(final_fallback_url);
@@ -284,10 +278,10 @@ pub async fn validate(
     // now validate the code returned to us if we are allowed to process
     tracing::info!("Validating Bungie OAUTH");
     let mut validation_response: Option<BungieValidationResponse> = None;
-    let api_key = env::get(AppVariable::BungieApiKey);
+    let api_key = state.extension.bungie_api_key.clone();
     if do_process {
-        let client_id = env::get(AppVariable::BungieClientId);
-        let client_secret = env::get(AppVariable::BungieClientSecret);
+        let client_id = state.extension.bungie_client_id.clone();
+        let client_secret = state.extension.bungie_client_secret.clone();
         let form_body = serde_urlencoded::to_string(OAuthLoginValidationRequest {
             grant_type: "authorization_code".to_string(),
             code: oauth_code.clone(),
@@ -295,6 +289,7 @@ pub async fn validate(
         .unwrap_or_default();
 
         let request = state
+            .extension
             .http_client
             .post("https://www.bungie.net/Platform/App/OAuth/token/")
             .body(form_body)
@@ -346,6 +341,7 @@ pub async fn validate(
         );
 
         let user_request_future = state
+            .extension
             .http_client
             .get(bungie_user_endpoint)
             .bearer_auth(access_token.as_str())
@@ -354,6 +350,7 @@ pub async fn validate(
             .send();
 
         let membership_request_future = state
+            .extension
             .http_client
             .get(bungie_membership_endpoint)
             .bearer_auth(access_token.clone())
@@ -405,12 +402,8 @@ pub async fn validate(
             app::session::read::<String>(SessionKey::AccountSecret, &session).unwrap_or_default();
 
         // look up account in the database
-        account = database::account::get(
-            session_account_token,
-            session_account_secret,
-            &state.database,
-        )
-        .await;
+        account =
+            database::account::get(&session_account_token, &session_account_secret, &state).await;
     }
 
     // we do indeed have an account tied to our session so we can continue on
@@ -425,7 +418,7 @@ pub async fn validate(
         account_platform = database::platform::read(
             AccountPlatformType::Bungie,
             user_data.membership_id.clone(),
-            &state.database,
+            &state,
         )
         .await;
     }
@@ -441,7 +434,7 @@ pub async fn validate(
                 platform: AccountPlatformType::Bungie,
                 platform_user: user_data.membership_id.clone(),
             },
-            &state.database,
+            &state,
         )
         .await;
     } else if do_process && !new_platform {
@@ -450,8 +443,7 @@ pub async fn validate(
         account_platform_record.account = account.id;
 
         // update the platform data
-        account_platform =
-            database::platform::update(&mut account_platform_record, &state.database).await;
+        account_platform = database::platform::update(&mut account_platform_record, &state).await;
     }
 
     do_process = account_platform.is_some();
@@ -525,18 +517,18 @@ pub async fn validate(
             value: membership_types.join(","),
         });
 
-        database::platform_data::write(&account_platform, &data, &state.database).await;
+        database::platform_data::write(&account_platform, &data, &state).await;
     }
 
     // bust cache key
     tracing::info!("Busting cache key: {}", cache_key);
-    state.profiles.delete(&cache_key).await;
+    state.extension.profiles.delete(&cache_key).await;
 
     let discord_username =
         app::session::read::<String>(SessionKey::Username, &session).unwrap_or_default();
     let search_cache_key = format!("search_discord||{}", discord_username);
     tracing::info!("Busting search key: {}", search_cache_key);
-    state.searches.delete(&search_cache_key).await;
+    state.extension.searches.delete(&search_cache_key).await;
 
     // no matter what we redirect back to our caller
     Redirect::temporary(final_redirect.as_str())

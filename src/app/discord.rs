@@ -1,8 +1,5 @@
-use levelcrush::tracing;
-
-use super::state::AppState;
+use super::extension::AccountExtension;
 use crate::{
-    env::{self, AppVariable},
     routes::{
         platform::OAuthLoginValidationRequest,
         responses::{DiscordUserResponse, DiscordValidationResponse},
@@ -10,14 +7,19 @@ use crate::{
     sync,
     sync::discord::MemberSyncResult,
 };
+use levelcrush::{app::ApplicationState, axum::headers::AccessControlRequestMethod, env, tracing};
 
-pub async fn validate_oauth(oauth_code: &str, state: &AppState) -> Option<DiscordValidationResponse> {
-    let client_id = env::get(AppVariable::DiscordClientId);
-    let client_secret = env::get(AppVariable::DiscordClientSecret);
-    let authorize_redirect = env::get(AppVariable::DiscordValidateUrl);
+pub async fn validate_oauth(
+    oauth_code: &str,
+    state: &ApplicationState<AccountExtension>,
+) -> Option<DiscordValidationResponse> {
+    let client_id = state.extension.discord_client_id.clone();
+    let client_secret = state.extension.discord_client_secret.clone();
+    let authorize_redirect = state.extension.discord_validate_url.clone();
     let scopes = vec!["identify"].join("+");
 
     let request = state
+        .extension
         .http_client
         .post("https://discord.com/api/oauth2/token")
         .body(
@@ -51,13 +53,17 @@ pub async fn validate_oauth(oauth_code: &str, state: &AppState) -> Option<Discor
 }
 
 /// queries a discord user directly by their discord id
-pub async fn member_api(discord_id: &str, state: &AppState) -> Option<DiscordUserResponse> {
-    let bot_token = env::get(AppVariable::DiscordBotToken);
+pub async fn member_api(
+    discord_id: &str,
+    state: &ApplicationState<AccountExtension>,
+) -> Option<DiscordUserResponse> {
+    let bot_token = state.extension.discord_bot_token.clone();
     let bot_auth = format!("Bot {}", bot_token);
     let discord_user_id = discord_id;
 
     let endpoint = format!("https://discord.com/api/v10/users/{}", discord_user_id);
     let request = state
+        .extension
         .http_client
         .get(&endpoint)
         .header("Authorization", bot_auth)
@@ -79,7 +85,10 @@ pub async fn member_api(discord_id: &str, state: &AppState) -> Option<DiscordUse
 }
 
 /// fetches a discord member by their id and syncs the result
-pub async fn member(discord_id: &str, state: &AppState) -> Option<MemberSyncResult> {
+pub async fn member(
+    discord_id: &str,
+    state: &ApplicationState<AccountExtension>,
+) -> Option<MemberSyncResult> {
     let discord_response = member_api(discord_id, state).await;
     if let Some(user_response) = discord_response {
         sync::discord::member(user_response, &state.database).await
@@ -89,8 +98,12 @@ pub async fn member(discord_id: &str, state: &AppState) -> Option<MemberSyncResu
 }
 
 /// query discord api with oauth authentication
-pub async fn member_oauth_api(access_token: &str, state: &AppState) -> Option<DiscordUserResponse> {
+pub async fn member_oauth_api(
+    access_token: &str,
+    state: &ApplicationState<AccountExtension>,
+) -> Option<DiscordUserResponse> {
     let request = state
+        .extension
         .http_client
         .get("https://discord.com/api/v10/users/@me")
         .bearer_auth(access_token)
@@ -113,7 +126,10 @@ pub async fn member_oauth_api(access_token: &str, state: &AppState) -> Option<Di
 
 /// Query a member via oauth authentication
 /// Update them in our database
-pub async fn member_oauth(access_token: &str, state: &AppState) -> Option<MemberSyncResult> {
+pub async fn member_oauth(
+    access_token: &str,
+    state: &ApplicationState<AccountExtension>,
+) -> Option<MemberSyncResult> {
     let oauth_response = member_oauth_api(access_token, state).await;
     if let Some(user_response) = oauth_response {
         sync::discord::member(user_response, &state.database).await

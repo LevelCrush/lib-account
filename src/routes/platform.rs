@@ -1,6 +1,7 @@
-use crate::app::state::AppState;
 use axum::Router;
-use levelcrush::axum;
+use levelcrush::{app::ApplicationState, axum};
+
+use crate::app::extension::AccountExtension;
 
 pub mod bungie;
 pub mod discord;
@@ -28,7 +29,7 @@ pub struct OAuthLoginValidationRequest {
     pub scope: String,
 }
 
-pub fn router() -> Router<AppState> {
+pub fn router() -> Router<ApplicationState<AccountExtension>> {
     Router::new()
         .nest("/discord", discord::router())
         .nest("/twitch", twitch::router())

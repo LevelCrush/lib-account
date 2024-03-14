@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use crate::app::extension::AccountExtension;
 use crate::entities::{account_platform_data, account_platforms, accounts};
 
-#[derive(Clone, Debug, serde::Serialize, FromQueryResult)]
+#[derive(Clone, Debug, Default, serde::Serialize, FromQueryResult)]
 pub struct AccountLinkedPlatformsResult {
     pub account_token: String,
     pub username: String,
@@ -20,7 +20,7 @@ pub struct AccountLinkedPlatformsResult {
     pub twitch: String,
 }
 
-#[derive(Clone, Debug, serde::Serialize, FromQueryResult)]
+#[derive(Clone, Debug, Default, serde::Serialize, FromQueryResult)]
 pub struct AccountLinkedPlatformDataResult {
     pub platform: String,
     pub platform_user: i64,

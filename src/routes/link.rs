@@ -1,10 +1,9 @@
+use crate::app::{self, extension::AccountExtension};
+
 use super::responses::LinkGeneratedResponse;
-use crate::{
-    app::{self, state::AppState},
-    env::{self, AppVariable},
-};
 use axum::Router;
 use levelcrush::{
+    app::ApplicationState,
     axum::{
         self,
         extract::{Path, Query, State},
@@ -31,7 +30,7 @@ pub struct LinkQuery {
     pub code: Option<String>,
 }
 
-pub fn router() -> Router<AppState> {
+pub fn router() -> Router<ApplicationState<AccountExtension>> {
     Router::new()
         .route("/generate", post(link_generate))
         .route("/platform/:platform", get(link_platform))
@@ -41,7 +40,7 @@ pub fn router() -> Router<AppState> {
 
 async fn link_generate(
     headers: HeaderMap,
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     Json(payload): Json<LinkGeneratePayload>,
 ) -> Json<APIResponse<LinkGeneratedResponse>> {
     let key_header = match headers.get("Account-Key") {
@@ -51,7 +50,7 @@ async fn link_generate(
         _ => "",
     };
 
-    let server_key = env::get(AppVariable::AccountKey);
+    let server_key = state.extension.account_key.clone();
     if server_key != key_header {
         return Json(APIResponse::new());
     }
@@ -74,6 +73,7 @@ async fn link_generate(
         // whena  user makes a request to /link/bungie or /link/twitch with  ?code=hash , if the has is found in link_gen cache, then we will trust them
         // this will only stay in the cache for 5 minutes.
         state
+            .extension
             .link_gens
             .write(
                 hash.clone(),
@@ -95,13 +95,13 @@ async fn link_generate(
 async fn link_platform(
     Query(query): Query<LinkQuery>,
     Path(target_platform): Path<String>,
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     mut session: WritableSession,
 ) -> Redirect {
     let mut link_code = String::new();
     let member = {
         if let Some(code) = query.code {
-            let sync_result = state.link_gens.access(&code).await;
+            let sync_result = state.extension.link_gens.access(&code).await;
             link_code = code.clone();
             sync_result
         } else {
@@ -114,28 +114,28 @@ async fn link_platform(
         let platform = slugify(&target_platform.to_lowercase());
         let done_url = format!(
             "{}/link/done?code={}",
-            env::get(AppVariable::HostAccounts),
+            state.extension.server_host,
             urlencoding::encode(&link_code),
         );
         let redirect_url = format!(
             "{}/platform/{}/login?redirect={}",
-            env::get(AppVariable::HostAccounts),
+            state.extension.server_host,
             urlencoding::encode(&platform),
             urlencoding::encode(&done_url)
         );
         Redirect::temporary(&redirect_url)
     } else {
-        let redirect_url = format!("{}/link/bad", env::get(AppVariable::HostAccounts));
+        let redirect_url = format!("{}/link/bad", state.extension.server_host);
         Redirect::temporary(&redirect_url)
     }
 }
 
 async fn link_done(
     Query(query): Query<LinkQuery>,
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
 ) -> &'static str {
     if let Some(code) = query.code {
-        state.link_gens.delete(&code).await;
+        state.extension.link_gens.delete(&code).await;
     }
     "Thank you for linking your account. You can close this tab/window now"
 }

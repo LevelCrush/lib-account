@@ -4,18 +4,19 @@ pub mod platform;
 pub mod profile;
 pub mod responses;
 pub mod search;
-use crate::app::state::AppState;
-use crate::env::{self, AppVariable};
+use crate::app::extension::AccountExtension;
 use crate::routes::platform::OAuthLoginQueries;
 use axum::extract::Query;
 use axum::response::Redirect;
 use axum::routing::get;
 use axum::Router;
+use levelcrush::app::ApplicationState;
+use levelcrush::axum::extract::State;
 use levelcrush::axum_sessions::extractors::WritableSession;
 use levelcrush::tracing;
 use levelcrush::{axum, urlencoding};
 
-pub fn router() -> Router<AppState> {
+pub fn router() -> Router<ApplicationState<AccountExtension>> {
     Router::new()
         .route("/login", get(login))
         .route("/logout", get(logout))
@@ -25,9 +26,12 @@ pub fn router() -> Router<AppState> {
         .nest("/link", link::router())
 }
 
-pub async fn login(Query(login_fields): Query<OAuthLoginQueries>) -> Redirect {
+pub async fn login(
+    State(state): State<ApplicationState<AccountExtension>>,
+    Query(login_fields): Query<OAuthLoginQueries>,
+) -> Redirect {
     // make sure we know where to return our user to after they are done logging in
-    let final_fallback_url = env::get(AppVariable::ServerFallbackUrl);
+    let final_fallback_url = state.extension.fallback_url;
     let final_redirect = login_fields.redirect.unwrap_or(final_fallback_url);
 
     let path = format!(
@@ -40,10 +44,11 @@ pub async fn login(Query(login_fields): Query<OAuthLoginQueries>) -> Redirect {
 }
 
 pub async fn logout(
+    State(state): State<ApplicationState<AccountExtension>>,
     Query(login_fields): Query<OAuthLoginQueries>,
     mut session: WritableSession,
 ) -> Redirect {
-    let final_fallback_url = env::get(AppVariable::ServerFallbackUrl);
+    let final_fallback_url = state.extension.fallback_url;
     let final_redirect = login_fields.redirect.unwrap_or(final_fallback_url);
 
     // destroy session

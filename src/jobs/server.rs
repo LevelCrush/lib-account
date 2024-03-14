@@ -11,50 +11,11 @@ use levelcrush::{app, tokio, tracing};
 use std::time::Duration;
 
 pub async fn run(db_core_connections: u32, db_app_connections: u32) -> anyhow::Result<()> {
-    tracing::info!("Setting up datbase connections");
-    let db_core_url = levelcrush::env::get(EnvVar::DatabaseUrlCore);
-    let db_core = levelcrush::database::connect(&db_core_url, db_core_connections).await;
+    let (mut app, app_state, app_settings, global_process) =
+        AccountExtension::app_state(db_core_connections, db_app_connections).await?;
 
-    let db_app_url = levelcrush::env::get(EnvVar::DatabaseUrlSelf);
-    let db = levelcrush::database::connect(&db_app_url, db_app_connections).await;
-
-    tracing::info!("Setting up state");
-    let mut app_state = ApplicationState {
-        database: db,
-        database_core: db_core,
-        tasks: TaskPool::new(10),
-        locks: RetryLock::default(),
-        extension: AccountExtension::new(),
-    };
-
-    tracing::info!("Application setting up");
-    let app = Application::env(&app_state).await?;
-
-    let global_process = app.process("server").await?;
-    global_process
-        .log_info("Loading application settings")
-        .await;
-
-    let mut app_settings = ApplicationSettings::load(&app).await?;
-
-    let server_port = app_settings
-        .get_global("server.port")
-        .unwrap_or_default()
-        .parse::<u16>()
-        .unwrap_or(3001);
-
-    let server_secret = app_settings.get_global("server.secret").unwrap_or_default();
-
-    // save these two settings into our application settings. This will ensure they are created properly.
-
-    let sp_setting = server_port.to_string();
-    let sp_req = app_settings.set_global("server.port", &sp_setting).await?;
-    let ss_req = app_settings
-        .set_global("server.secret", &server_secret)
-        .await?;
-
-    sp_req.await;
-    ss_req.await;
+    let server_port = app_state.extension.server_port;
+    let server_secret = app_state.extension.server_secret;
 
     if server_secret.is_empty() {
         panic!("Please set a server secret");
