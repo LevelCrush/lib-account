@@ -91,7 +91,7 @@ pub async fn member(
 ) -> Option<MemberSyncResult> {
     let discord_response = member_api(discord_id, state).await;
     if let Some(user_response) = discord_response {
-        sync::discord::member(user_response, &state.database).await
+        sync::discord::member(user_response, &state).await
     } else {
         None
     }
@@ -132,7 +132,7 @@ pub async fn member_oauth(
 ) -> Option<MemberSyncResult> {
     let oauth_response = member_oauth_api(access_token, state).await;
     if let Some(user_response) = oauth_response {
-        sync::discord::member(user_response, &state.database).await
+        sync::discord::member(user_response, &state).await
     } else {
         None
     }

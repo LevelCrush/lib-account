@@ -1,9 +1,10 @@
-use crate::app::state::AppState;
+use crate::app::extension::AccountExtension;
 use crate::database;
 use crate::database::account::AccountLinkedPlatformsResult;
 use axum::extract::State;
 use axum::Router;
 use axum::{routing::get, Json};
+use levelcrush::app::ApplicationState;
 use levelcrush::axum::extract::Path;
 use levelcrush::axum::routing::post;
 use levelcrush::cache::{CacheDuration, CacheValue};
@@ -11,7 +12,7 @@ use levelcrush::tracing;
 use levelcrush::{axum, server::APIResponse};
 use std::collections::HashMap;
 
-pub fn router() -> Router<AppState> {
+pub fn router() -> Router<ApplicationState<AccountExtension>> {
     Router::new()
         .route("/by/discord/:discord", get(discord_search))
         .route("/by/bungie/:bungie", get(bungie_search))
@@ -19,23 +20,28 @@ pub fn router() -> Router<AppState> {
 }
 
 async fn discord_search(
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     Path(discord): Path<String>,
 ) -> Json<APIResponse<AccountLinkedPlatformsResult>> {
     let mut response = APIResponse::new();
 
     let cache_key = format!("search_discord||{}", discord);
 
-    let linked_accounts = if let Some(data) = state.searches.access(&cache_key).await {
+    let linked_accounts = if let Some(data) = state.extension.searches.access(&cache_key).await {
         Some(data)
     } else {
-        let results = database::account::by_discord(discord, &state.database).await;
+        let results = database::account::by_discord(discord, &state).await;
         if let Some(results) = &results {
             state
+                .extension
                 .searches
                 .write(
                     &cache_key,
-                    CacheValue::with_duration(results.clone(), CacheDuration::Minute, CacheDuration::Minute),
+                    CacheValue::with_duration(
+                        results.clone(),
+                        CacheDuration::Minute,
+                        CacheDuration::Minute,
+                    ),
                 )
                 .await;
         }
@@ -53,23 +59,28 @@ async fn discord_search(
 }
 
 pub async fn bungie_search(
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     Path(bungie): Path<String>,
 ) -> Json<APIResponse<AccountLinkedPlatformsResult>> {
     let mut response = APIResponse::new();
 
     let cache_key = format!("search_bungie||{}", bungie);
 
-    let linked_accounts = if let Some(data) = state.searches.access(&cache_key).await {
+    let linked_accounts = if let Some(data) = state.extension.searches.access(&cache_key).await {
         Some(data)
     } else {
-        let results = database::account::by_bungie(bungie, &state.database).await;
+        let results = database::account::by_bungie(bungie, &state).await;
         if let Some(results) = &results {
             state
+                .extension
                 .searches
                 .write(
                     &cache_key,
-                    CacheValue::with_duration(results.clone(), CacheDuration::Minute, CacheDuration::Minute),
+                    CacheValue::with_duration(
+                        results.clone(),
+                        CacheDuration::Minute,
+                        CacheDuration::Minute,
+                    ),
                 )
                 .await;
         }
@@ -87,7 +98,7 @@ pub async fn bungie_search(
 }
 
 pub async fn bungie_search_mass(
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     payload: Option<Json<Vec<String>>>,
 ) -> Json<APIResponse<HashMap<String, Option<AccountLinkedPlatformsResult>>>> {
     let mut response = APIResponse::new();
@@ -98,7 +109,7 @@ pub async fn bungie_search_mass(
         let flat_names = requested_names.join(",");
         let cache_key = format!("mass_search_bungie||{}", flat_names);
 
-        let cached_results = state.mass_searches.access(&cache_key).await;
+        let cached_results = state.extension.mass_searches.access(&cache_key).await;
         let mut update_cache = false;
         let linked_accounts = if let Some(data) = cached_results {
             tracing::info!("Returning cache for mass search");
@@ -107,16 +118,21 @@ pub async fn bungie_search_mass(
         } else {
             tracing::info!("Fetching mass search info");
             update_cache = true;
-            database::account::by_bungie_bulk(&requested_names, &state.database).await
+            database::account::by_bungie_bulk(&requested_names, &state).await
         };
 
         if update_cache {
             tracing::info!("Caching mass search info");
             state
+                .extension
                 .mass_searches
                 .write(
                     &cache_key,
-                    CacheValue::with_duration(linked_accounts.clone(), CacheDuration::Minute, CacheDuration::Minute),
+                    CacheValue::with_duration(
+                        linked_accounts.clone(),
+                        CacheDuration::Minute,
+                        CacheDuration::Minute,
+                    ),
                 )
                 .await;
         }

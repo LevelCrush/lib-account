@@ -1,36 +1,37 @@
+use crate::app;
+use crate::app::extension::AccountExtension;
 use crate::app::session::SessionKey;
-use crate::app::state::AppState;
-use crate::env::AppVariable;
 use crate::routes::platform::{OAuthLoginQueries, OAuthLoginValidationQueries};
-use crate::{app, env};
 use axum::extract::{Query, State};
 use axum::response::Redirect;
 use axum::routing::get;
 use axum::Router;
 use axum_sessions::extractors::WritableSession;
+use levelcrush::app::ApplicationState;
 use levelcrush::tracing;
 use levelcrush::util::unix_timestamp;
 use levelcrush::{axum, urlencoding};
 use levelcrush::{axum_sessions, md5};
 
-pub fn router() -> Router<AppState> {
+pub fn router() -> Router<ApplicationState<AccountExtension>> {
     Router::new()
         .route("/login", get(login))
         .route("/validate", get(validate))
 }
 
 pub async fn login(
+    State(state): State<ApplicationState<AccountExtension>>,
     Query(login_fields): Query<OAuthLoginQueries>,
     mut session: WritableSession,
 ) -> Redirect {
     // make sure we know where to return our user to after they are done logging in
-    let server_url = env::get(AppVariable::ServerUrl);
-    let fallback_url = env::get(AppVariable::ServerFallbackUrl);
+    let server_url = state.extension.server_host.clone();
+    let fallback_url = state.extension.fallback_url.clone();
     let final_fallback_url = fallback_url;
     let final_redirect = login_fields.redirect.unwrap_or(final_fallback_url);
 
-    let client_id = env::get(AppVariable::DiscordClientId);
-    let authorize_redirect = env::get(AppVariable::DiscordValidateUrl);
+    let client_id = state.extension.discord_client_id;
+    let authorize_redirect = state.extension.discord_validate_url;
     let scopes = vec!["identify"].join("+");
 
     let hash_input = md5::compute(format!("{}||{}", client_id, unix_timestamp()));
@@ -64,12 +65,12 @@ pub async fn login(
 
 pub async fn validate(
     Query(validation_query): Query<OAuthLoginValidationQueries>,
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     mut session: WritableSession,
 ) -> Redirect {
     let query_fields = validation_query;
     // make sure we know where to return our user to after they are done logging in
-    let fallback_url = env::get(AppVariable::ServerFallbackUrl);
+    let fallback_url = state.extension.fallback_url.clone();
     let final_fallback_url = fallback_url;
 
     let final_redirect = app::session::read(SessionKey::PlatformDiscordCallerUrl, &session)
@@ -127,7 +128,7 @@ pub async fn validate(
         app::session::read::<String>(SessionKey::Username, &session).unwrap_or_default();
     let search_cache_key = format!("search_discord||{}", discord_username);
     tracing::info!("Busting search key: {}", search_cache_key);
-    state.searches.delete(&search_cache_key).await;
+    state.extension.searches.delete(&search_cache_key).await;
 
     // no matter what we redirect back to our caller
     Redirect::temporary(final_redirect.as_str())

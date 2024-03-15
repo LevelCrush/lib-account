@@ -1,10 +1,11 @@
+use crate::app::extension::AccountExtension;
 use crate::app::session::SessionKey;
-use crate::app::state::AppState;
 use crate::{app, database};
 use axum::extract::State;
 use axum::Router;
 use axum::{routing::get, routing::post, Json};
 use axum_sessions::extractors::ReadableSession;
+use levelcrush::app::ApplicationState;
 use levelcrush::cache::{CacheDuration, CacheValue};
 use levelcrush::server::APIResponse;
 use levelcrush::util::unix_timestamp;
@@ -28,7 +29,7 @@ pub struct ChallengePayload {
     pub challenge: String,
 }
 
-pub fn router() -> Router<AppState> {
+pub fn router() -> Router<ApplicationState<AccountExtension>> {
     Router::new()
         .route("/", get(json_view))
         .route("/json", get(json_view))
@@ -36,12 +37,12 @@ pub fn router() -> Router<AppState> {
 }
 
 pub async fn challenge_view(
-    State(state): State<AppState>,
+    State(state): State<ApplicationState<AccountExtension>>,
     Json(payload): Json<ChallengePayload>,
 ) -> Json<APIResponse<ProfileView>> {
     let mut response = APIResponse::new();
 
-    let challenge_profile = state.challenges.access(&payload.challenge).await;
+    let challenge_profile = state.extension.challenges.access(&payload.challenge).await;
     if challenge_profile.is_some() {
         tracing::info!("Found challenge match!: {}", payload.challenge);
     }
@@ -51,7 +52,7 @@ pub async fn challenge_view(
     Json(response)
 }
 
-fn generate_challenge(display_name: &str, admin: i64) -> String {
+fn generate_challenge(display_name: &str, admin: i8) -> String {
     let uuid = Uuid::new_v4().to_string();
     let challenge_digest = md5::compute(format!(
         "{}{}{}{}",
@@ -65,7 +66,7 @@ fn generate_challenge(display_name: &str, admin: i64) -> String {
 
 /// output a json view of the data related to the currently logged in session
 pub async fn json_view(
-    State(mut state): State<AppState>,
+    State(mut state): State<ApplicationState<AccountExtension>>,
     session: ReadableSession,
 ) -> Json<APIResponse<ProfileView>> {
     let mut response = APIResponse::new();
@@ -89,7 +90,7 @@ pub async fn json_view(
         );
 
         // this will cover any request that come in **after** the first one
-        let retries = state.guard.wait_until_release(&cache_key).await;
+        let retries = state.extension.guard.wait_until_release(&cache_key).await;
         if retries > 0 {
             tracing::info!(
                 "Took {} attempts to release guard for {}",
@@ -97,7 +98,7 @@ pub async fn json_view(
                 display_name
             );
         }
-        profile_view = state.profiles.access(&cache_key).await
+        profile_view = state.extension.profiles.access(&cache_key).await
     }
 
     if profile_view.is_some() {
@@ -109,26 +110,22 @@ pub async fn json_view(
 
     if fetch_profile {
         tracing::info!("Locking  profile request for {}", display_name);
-        let retries = state.guard.lock(&cache_key).await;
+        let retries = state.extension.guard.lock(&cache_key).await;
         if retries > 0 {
             // we had to wait! this means we may be able to pull from our cache
-            profile_view = state.profiles.access(&cache_key).await;
+            profile_view = state.extension.profiles.access(&cache_key).await;
             fetch_profile = profile_view.is_none();
             if profile_view.is_some() {
                 // unlock the guard in the case that we do have profile data cached
-                state.guard.unlock(&cache_key).await;
+                state.extension.guard.unlock(&cache_key).await;
             }
         }
     }
 
     if fetch_profile {
         tracing::info!("Fetching info from db!: {}", account_token);
-        account = database::account::get(
-            account_token.as_str(),
-            account_token_secret,
-            &state.database,
-        )
-        .await;
+        account =
+            database::account::get(account_token.as_str(), &account_token_secret, &state).await;
     }
 
     if fetch_profile {
@@ -137,7 +134,7 @@ pub async fn json_view(
             let mut display_name = String::new();
 
             tracing::info!("Fetching platforms from db!: {}", account_token);
-            let platforms = database::account::all_data(&account, &state.database).await;
+            let platforms = database::account::all_data(&account, &state).await;
 
             // loop through the platform data nad find a platform that is discord related and pull information from there
             for (platform, platform_data) in platforms.iter() {
@@ -162,6 +159,7 @@ pub async fn json_view(
 
             // intentionally keep this challenge cache around longer then the profile cache result
             state
+                .extension
                 .challenges
                 .write(
                     challenge_hash,
@@ -176,6 +174,7 @@ pub async fn json_view(
             // save into cache
             tracing::info!("Storing in cache!: {}", data.display_name);
             state
+                .extension
                 .profiles
                 .write(
                     cache_key.clone(),
@@ -194,7 +193,7 @@ pub async fn json_view(
 
         // make sure we have unlocked the guard.
         tracing::info!("Unlocking profile request: {}", display_name);
-        state.guard.unlock(&cache_key).await;
+        state.extension.guard.unlock(&cache_key).await;
     }
 
     response.data(profile_view);

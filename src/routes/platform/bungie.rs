@@ -234,7 +234,7 @@ pub async fn validate(
 
     let session_id = session.id();
     let cache_key = format!("{}{}", CACHE_KEY_PROFILE, session_id);
-    let final_fallback_url = state.extension.fallback_url;
+    let final_fallback_url = state.extension.fallback_url.clone();
     let final_redirect =
         app::session::read::<String>(SessionKey::PlatformBungieCallerUrl, &session)
             .unwrap_or(final_fallback_url);

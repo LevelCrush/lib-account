@@ -10,6 +10,7 @@ use levelcrush::{
     },
     cache::MemoryCache,
     database,
+    entities::application_user_settings,
     env::EnvVar,
     reqwest,
     retry_lock::RetryLock,
@@ -36,6 +37,9 @@ pub struct AccountExtension {
     pub bungie_client_id: String,
     pub bungie_client_secret: String,
     pub bungie_api_key: String,
+    pub twitch_client_id: String,
+    pub twitch_client_secret: String,
+    pub twitch_validate_url: String,
     pub server_port: u16,
     pub server_secret: String,
     pub server_host: String,
@@ -126,6 +130,16 @@ impl AccountExtension {
             .get_global("bungie.api_key")
             .unwrap_or_default();
 
+        let twitch_client_id = app_settings
+            .get_global("twitch.client_id")
+            .unwrap_or_default();
+        let twitch_client_secret = app_settings
+            .get_global("twitch.client_secret")
+            .unwrap_or_default();
+        let twitch_validate_url = app_settings
+            .get_global("twitch.validate_url")
+            .unwrap_or_default();
+
         let server_host = app_settings.get_global("server.host").unwrap_or_default();
 
         let account_key = app_settings.get_global("account.key").unwrap_or_default();
@@ -160,6 +174,15 @@ impl AccountExtension {
             app_settings
                 .set_global("bungie.api_key", &bungie_api_key)
                 .await?,
+            app_settings
+                .set_global("twitch.client_id", &twitch_client_id)
+                .await?,
+            app_settings
+                .set_global("twitch.client_secret", &twitch_client_secret)
+                .await?,
+            app_settings
+                .set_global("twitch.validate_url", &twitch_validate_url)
+                .await?,
         ];
 
         // set inside the extension
@@ -174,6 +197,9 @@ impl AccountExtension {
         app_state.extension.bungie_client_id = bungie_id;
         app_state.extension.bungie_client_secret = bungie_client_secret;
         app_state.extension.bungie_api_key = bungie_api_key;
+        app_state.extension.twitch_client_id = twitch_client_id;
+        app_state.extension.twitch_client_secret = twitch_client_secret;
+        app_state.extension.twitch_validate_url = twitch_validate_url;
 
         // wait on all handles to finish
         levelcrush::futures::future::join_all(handles).await;

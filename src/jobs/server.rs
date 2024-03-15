@@ -1,21 +1,16 @@
 use crate::app::extension::AccountExtension;
 use crate::routes;
-use levelcrush::app::process::LogLevel;
-use levelcrush::app::settings::ApplicationSettings;
-use levelcrush::app::{Application, ApplicationState};
-use levelcrush::env::EnvVar;
-use levelcrush::retry_lock::RetryLock;
-use levelcrush::task_pool::TaskPool;
-use levelcrush::{anyhow, server::Server};
-use levelcrush::{app, tokio, tracing};
-use std::time::Duration;
+use levelcrush::anyhow;
+use levelcrush::server::Server;
+use levelcrush::tokio;
 
 pub async fn run(db_core_connections: u32, db_app_connections: u32) -> anyhow::Result<()> {
     let (mut app, app_state, app_settings, global_process) =
-        AccountExtension::app_state(db_core_connections, db_app_connections).await?;
+        AccountExtension::app_stack(db_core_connections, db_app_connections, "account-server")
+            .await?;
 
     let server_port = app_state.extension.server_port;
-    let server_secret = app_state.extension.server_secret;
+    let server_secret = app_state.extension.server_secret.clone();
 
     if server_secret.is_empty() {
         panic!("Please set a server secret");

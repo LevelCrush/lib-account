@@ -1,4 +1,5 @@
 use crate::{
+    app::extension::AccountExtension,
     database::{
         self,
         platform::{AccountPlatformType, NewAccountPlatform},
@@ -6,8 +7,7 @@ use crate::{
     },
     routes::responses::DiscordUserResponse,
 };
-use levelcrush::{tokio, tracing, util::unix_timestamp, uuid::Uuid};
-use sqlx::SqlitePool;
+use levelcrush::{app::ApplicationState, tokio, tracing, util::unix_timestamp, uuid::Uuid};
 
 #[derive(Default, Clone, Debug)]
 pub struct MemberSyncResult {
@@ -18,10 +18,17 @@ pub struct MemberSyncResult {
 }
 
 /// Syncs the api response from discord and returns a member sync result
-pub async fn member(discord_user: DiscordUserResponse, pool: &SqlitePool) -> Option<MemberSyncResult> {
+pub async fn member(
+    discord_user: DiscordUserResponse,
+    state: &ApplicationState<AccountExtension>,
+) -> Option<MemberSyncResult> {
     let discord_user_id = discord_user.id.unwrap_or_default();
-    let mut account =
-        database::platform::match_account(discord_user_id.clone(), AccountPlatformType::Discord, pool).await;
+    let mut account = database::platform::match_account(
+        discord_user_id.clone(),
+        AccountPlatformType::Discord,
+        state,
+    )
+    .await;
     let mut sync_result = MemberSyncResult::default();
     let new_account = if account.is_none() {
         // new account
@@ -34,11 +41,16 @@ pub async fn member(discord_user: DiscordUserResponse, pool: &SqlitePool) -> Opt
             discord_user.discriminator.clone(),
             Uuid::new_v4(),
         );
-        let token_secret_seed = format!("..{}..||..{}..||..{}..", token_seed.clone(), Uuid::new_v4(), timestamp);
+        let token_secret_seed = format!(
+            "..{}..||..{}..||..{}..",
+            token_seed.clone(),
+            Uuid::new_v4(),
+            timestamp
+        );
 
         // create an account for this
         tracing::info!("Creating account");
-        account = database::account::create(token_seed, token_secret_seed, pool).await;
+        account = database::account::create(&token_seed, &token_secret_seed, state).await;
 
         true
     } else {
@@ -55,14 +67,16 @@ pub async fn member(discord_user: DiscordUserResponse, pool: &SqlitePool) -> Opt
                     platform: AccountPlatformType::Discord,
                     platform_user: discord_user_id,
                 },
-                pool,
+                state,
             )
             .await;
         } else {
             tracing::info!("Account found and matched. Just login");
 
             // fetch the known account platform tied to this account
-            account_platform = database::platform::from_account(&account, AccountPlatformType::Discord, pool).await;
+            account_platform =
+                database::platform::from_account(&account, AccountPlatformType::Discord, state)
+                    .await;
         }
 
         sync_result.account_token = account.token;
@@ -105,8 +119,8 @@ pub async fn member(discord_user: DiscordUserResponse, pool: &SqlitePool) -> Opt
         ];
 
         // write the metadata out to be linked to the platform
-        database::platform_data::write(&account_platform, &data, pool).await;
-        database::platform::update(&mut account_platform, pool).await;
+        database::platform_data::write(&account_platform, &data, state).await;
+        database::platform::update(&mut account_platform, state).await;
 
         sync_result.display_name = display_name;
         sync_result.username = discord_user_name;
