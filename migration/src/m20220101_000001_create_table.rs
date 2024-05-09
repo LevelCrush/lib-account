@@ -118,7 +118,7 @@ impl MigrationTrait for Migration {
                     )
                     .index(
                         Index::create()
-                            .if_not_exists()
+                             .if_not_exists()
                             .table(AccountPlatforms::Table)
                             .name("accountplatforms-platform")
                             .col(AccountPlatforms::Platform),
