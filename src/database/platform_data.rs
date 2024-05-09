@@ -76,7 +76,7 @@ pub async fn write(
     let mut value_map = HashMap::new();
     let mut query_parameters = Vec::new();
     let mut query_values = Vec::new();
-
+    let timestamp = unix_timestamp();
     for (index, new_data) in values.iter().enumerate() {
         keys.push(new_data.key.as_str());
         value_map.insert(new_data.key.clone(), index);
@@ -87,6 +87,11 @@ pub async fn write(
             vec![
                 Value::BigInt(Some(account_platform.account)),
                 Value::BigInt(Some(account_platform.id)),
+                Value::String(Some(Box::new(new_data.key.clone()))),
+                Value::String(Some(Box::new(new_data.value.clone()))),
+                Value::BigInt(Some(timestamp)),
+                Value::BigInt(Some(0)),
+                Value::BigInt(Some(0)),
             ]
             .into_iter(),
         );
