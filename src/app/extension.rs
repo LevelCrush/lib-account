@@ -104,6 +104,7 @@ impl AccountExtension {
         let discord_client_id = app_settings.get_global("discord.client_id").unwrap_or_default();
         let discord_client_secret = app_settings.get_global("discord.client_secret").unwrap_or_default();
         let discord_oauth_validate = app_settings.get_global("discord.validate_url").unwrap_or_default();
+        let allowed_discords = app_settings.get_global("discord.server_list").unwrap_or_default();
 
         let fallback_url = app_settings.get_global("server.fallback_url").unwrap_or_default();
 
@@ -147,6 +148,9 @@ impl AccountExtension {
             app_settings
                 .set_global("twitch.validate_url", &twitch_validate_url)
                 .await?,
+            app_settings
+                .set_global("discord.server_list", &allowed_discords)
+                .await?,
         ];
 
         // set inside the extension
@@ -164,7 +168,10 @@ impl AccountExtension {
         app_state.extension.twitch_client_id = twitch_client_id;
         app_state.extension.twitch_client_secret = twitch_client_secret;
         app_state.extension.twitch_validate_url = twitch_validate_url;
-        app_state.extension.allowed_discords = Vec::new();
+        app_state.extension.allowed_discords = allowed_discords
+            .split(',')
+            .map(|v| v.parse::<i64>().unwrap_or_default())
+            .collect::<Vec<i64>>();
 
         // wait on all handles to finish
         levelcrush::futures::future::join_all(handles).await;
