@@ -16,6 +16,15 @@ pub struct DiscordUserResponse {
     pub display_name: Option<String>,
 }
 
+#[ExternalAPIResponse]
+pub struct DiscordGuild {
+    pub id: String,
+    pub name: String,
+    pub owner: bool,
+}
+
+pub type DiscordUserGuildsResponse = Vec<DiscordGuild>;
+
 #[derive(serde::Serialize)]
 pub struct LinkGeneratedResponse {
     pub code: String,

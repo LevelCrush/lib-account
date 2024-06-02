@@ -1,4 +1,5 @@
 use super::extension::AccountExtension;
+use crate::routes::responses::DiscordUserGuildsResponse;
 use crate::{
     routes::{
         platform::OAuthLoginValidationRequest,
@@ -119,7 +120,10 @@ pub async fn member_oauth_api(
 }
 
 /// Query the discord api directly and get the currently logged in users guild list
-pub async fn member_oauth_guilds_api(access_token: &str, state: &ApplicationState<AccountExtension>) -> Option<()> {
+pub async fn member_oauth_guilds_api(
+    access_token: &str,
+    state: &ApplicationState<AccountExtension>,
+) -> Option<DiscordUserGuildsResponse> {
     let request = state
         .extension
         .http_client
@@ -128,7 +132,17 @@ pub async fn member_oauth_guilds_api(access_token: &str, state: &ApplicationStat
         .send()
         .await;
 
-    None
+    if let Ok(response) = request {
+        let json = response.json::<DiscordUserGuildsResponse>().await;
+        if let Ok(data) = json {
+            Some(data)
+        } else {
+            tracing::error!("Failed to parse incoming json for User Guild request");
+            None
+        }
+    } else {
+        None
+    }
 }
 
 /// Query a member via oauth authentication
