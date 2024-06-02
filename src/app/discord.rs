@@ -123,7 +123,7 @@ pub async fn member_oauth_api(
 pub async fn member_oauth_guilds_api(
     access_token: &str,
     state: &ApplicationState<AccountExtension>,
-) -> Option<DiscordUserGuildsResponse> {
+) -> DiscordUserGuildsResponse {
     let request = state
         .extension
         .http_client
@@ -135,13 +135,13 @@ pub async fn member_oauth_guilds_api(
     if let Ok(response) = request {
         let json = response.json::<DiscordUserGuildsResponse>().await;
         if let Ok(data) = json {
-            Some(data)
+            data
         } else {
             tracing::error!("Failed to parse incoming json for User Guild request");
-            None
+            Vec::new()
         }
     } else {
-        None
+        Vec::new()
     }
 }
 

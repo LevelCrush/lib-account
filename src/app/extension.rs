@@ -27,7 +27,7 @@ pub struct AccountExtension {
     pub challenges: MemoryCache<ProfileView>,
     pub link_gens: MemoryCache<MemberSyncResult>,
     pub guard: RetryLock,
-    pub allowed_discords: Vec<i64>,
+    pub allowed_discords: Vec<String>,
     pub discord_client_id: String,
     pub discord_client_secret: String,
     pub discord_validate_url: String,
@@ -170,8 +170,8 @@ impl AccountExtension {
         app_state.extension.twitch_validate_url = twitch_validate_url;
         app_state.extension.allowed_discords = allowed_discords
             .split(',')
-            .map(|v| v.parse::<i64>().unwrap_or_default())
-            .collect::<Vec<i64>>();
+            .map(|v| v.to_string())
+            .collect::<Vec<String>>();
 
         // wait on all handles to finish
         levelcrush::futures::future::join_all(handles).await;

@@ -18,7 +18,7 @@ pub struct DiscordUserResponse {
 
 #[ExternalAPIResponse]
 pub struct DiscordRole {
-    pub id: i64,
+    pub id: Option<String>,
     pub name: String,
 }
 
