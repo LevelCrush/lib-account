@@ -33,7 +33,7 @@ pub async fn login(
 
     let client_id = state.extension.discord_client_id;
     let authorize_redirect = state.extension.discord_validate_url;
-    let scopes = vec!["identify"].join("+");
+    let scopes = vec!["identify", "guilds"].join("+");
 
     let hash_input = md5::compute(format!("{}||{}", client_id, unix_timestamp()));
     let discord_state = format!("{:x}", hash_input);

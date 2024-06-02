@@ -133,11 +133,13 @@ pub async fn member_oauth_guilds_api(
         .await;
 
     if let Ok(response) = request {
-        let json = response.json::<DiscordUserGuildsResponse>().await;
+        let raw_json = response.text().await.unwrap_or_default();
+        let json = serde_json::from_str(&raw_json);
         if let Ok(data) = json {
             data
         } else {
-            tracing::error!("Failed to parse incoming json for User Guild request");
+            let err = json.err().unwrap();
+            tracing::error!("Failed to parse incoming json for User Guild request {err:?}\r\n{raw_json}");
             Vec::new()
         }
     } else {
