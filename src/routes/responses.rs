@@ -17,9 +17,17 @@ pub struct DiscordUserResponse {
 }
 
 #[ExternalAPIResponse]
+pub struct DiscordRole {
+    pub id: i64,
+    pub name: String,
+}
+
+#[ExternalAPIResponse]
 pub struct DiscordGuild {
     pub id: String,
     pub name: String,
+
+    #[serde(default)]
     pub owner: bool,
 }
 
