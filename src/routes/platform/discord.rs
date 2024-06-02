@@ -66,7 +66,7 @@ pub async fn validate(
     let fallback_url = state.extension.fallback_url.clone();
     let final_fallback_url = fallback_url;
 
-    let final_redirect =
+    let mut final_redirect =
         app::session::read(SessionKey::PlatformDiscordCallerUrl, &session).unwrap_or(final_fallback_url);
 
     let mut do_process = true;
@@ -130,6 +130,9 @@ pub async fn validate(
         let search_cache_key = format!("search_discord||{}", discord_username);
         tracing::info!("Busting search key: {}", search_cache_key);
         state.extension.searches.delete(&search_cache_key).await;
+    } else {
+        let param_type = if final_redirect.contains("?") { "&" } else { "?" };
+        final_redirect = format!("{final_redirect}{param_type}error=NotAllowed")
     }
 
     // no matter what we redirect back to our caller
