@@ -1,13 +1,10 @@
 use crate::{
-    database::account::AccountLinkedPlatformsResult, routes::profile::ProfileView,
-    sync::discord::MemberSyncResult,
+    database::account::AccountLinkedPlatformsResult, routes::profile::ProfileView, sync::discord::MemberSyncResult,
 };
 use levelcrush::{
     alias::UnixTimestamp,
     anyhow,
-    app::{
-        process::ApplicationProcess, settings::ApplicationSettings, Application, ApplicationState,
-    },
+    app::{process::ApplicationProcess, settings::ApplicationSettings, Application, ApplicationState},
     cache::MemoryCache,
     database,
     entities::application_user_settings,
@@ -30,6 +27,7 @@ pub struct AccountExtension {
     pub challenges: MemoryCache<ProfileView>,
     pub link_gens: MemoryCache<MemberSyncResult>,
     pub guard: RetryLock,
+    pub allowed_discords: Vec<String>,
     pub discord_client_id: String,
     pub discord_client_secret: String,
     pub discord_validate_url: String,
@@ -91,9 +89,7 @@ impl AccountExtension {
         let mut app = Application::env(&app_state).await?;
 
         let global_process = app.process(process_name).await?;
-        global_process
-            .log_info("Loading application settings")
-            .await;
+        global_process.log_info("Loading application settings").await;
 
         let mut app_settings = ApplicationSettings::load(&app).await?;
 
@@ -105,40 +101,21 @@ impl AccountExtension {
             .parse::<u16>()
             .unwrap_or(3001);
 
-        let discord_client_id = app_settings
-            .get_global("discord.client_id")
-            .unwrap_or_default();
-        let discord_client_secret = app_settings
-            .get_global("discord.client_secret")
-            .unwrap_or_default();
-        let discord_oauth_validate = app_settings
-            .get_global("discord.validate_url")
-            .unwrap_or_default();
+        let discord_client_id = app_settings.get_global("discord.client_id").unwrap_or_default();
+        let discord_client_secret = app_settings.get_global("discord.client_secret").unwrap_or_default();
+        let discord_oauth_validate = app_settings.get_global("discord.validate_url").unwrap_or_default();
+        let allowed_discords = app_settings.get_global("discord.server_list").unwrap_or_default();
 
-        let fallback_url = app_settings
-            .get_global("server.fallback_url")
-            .unwrap_or_default();
+        let fallback_url = app_settings.get_global("server.fallback_url").unwrap_or_default();
 
-        let bungie_id = app_settings
-            .get_global("bungie.client_id")
-            .unwrap_or_default();
-        let bungie_client_secret = app_settings
-            .get_global("bungie.client_secret")
-            .unwrap_or_default();
+        let bungie_id = app_settings.get_global("bungie.client_id").unwrap_or_default();
+        let bungie_client_secret = app_settings.get_global("bungie.client_secret").unwrap_or_default();
 
-        let bungie_api_key = app_settings
-            .get_global("bungie.api_key")
-            .unwrap_or_default();
+        let bungie_api_key = app_settings.get_global("bungie.api_key").unwrap_or_default();
 
-        let twitch_client_id = app_settings
-            .get_global("twitch.client_id")
-            .unwrap_or_default();
-        let twitch_client_secret = app_settings
-            .get_global("twitch.client_secret")
-            .unwrap_or_default();
-        let twitch_validate_url = app_settings
-            .get_global("twitch.validate_url")
-            .unwrap_or_default();
+        let twitch_client_id = app_settings.get_global("twitch.client_id").unwrap_or_default();
+        let twitch_client_secret = app_settings.get_global("twitch.client_secret").unwrap_or_default();
+        let twitch_validate_url = app_settings.get_global("twitch.validate_url").unwrap_or_default();
 
         let server_host = app_settings.get_global("server.host").unwrap_or_default();
 
@@ -148,40 +125,31 @@ impl AccountExtension {
         let sp_setting = server_port.to_string();
         let handles = vec![
             app_settings.set_global("server.port", &sp_setting).await?,
-            app_settings
-                .set_global("server.secret", &server_secret)
-                .await?,
-            app_settings
-                .set_global("discord.client_id", &discord_client_id)
-                .await?,
+            app_settings.set_global("server.secret", &server_secret).await?,
+            app_settings.set_global("discord.client_id", &discord_client_id).await?,
             app_settings
                 .set_global("discord.client_secret", &discord_client_secret)
                 .await?,
             app_settings
                 .set_global("discord.validate_url", &discord_oauth_validate)
                 .await?,
-            app_settings
-                .set_global("server.fallback_url", &fallback_url)
-                .await?,
+            app_settings.set_global("server.fallback_url", &fallback_url).await?,
             app_settings.set_global("account.key", &account_key).await?,
             app_settings.set_global("server.host", &server_host).await?,
-            app_settings
-                .set_global("bungie.client_id", &bungie_id)
-                .await?,
+            app_settings.set_global("bungie.client_id", &bungie_id).await?,
             app_settings
                 .set_global("bungie.client_secret", &bungie_client_secret)
                 .await?,
-            app_settings
-                .set_global("bungie.api_key", &bungie_api_key)
-                .await?,
-            app_settings
-                .set_global("twitch.client_id", &twitch_client_id)
-                .await?,
+            app_settings.set_global("bungie.api_key", &bungie_api_key).await?,
+            app_settings.set_global("twitch.client_id", &twitch_client_id).await?,
             app_settings
                 .set_global("twitch.client_secret", &twitch_client_secret)
                 .await?,
             app_settings
                 .set_global("twitch.validate_url", &twitch_validate_url)
+                .await?,
+            app_settings
+                .set_global("discord.server_list", &allowed_discords)
                 .await?,
         ];
 
@@ -200,6 +168,10 @@ impl AccountExtension {
         app_state.extension.twitch_client_id = twitch_client_id;
         app_state.extension.twitch_client_secret = twitch_client_secret;
         app_state.extension.twitch_validate_url = twitch_validate_url;
+        app_state.extension.allowed_discords = allowed_discords
+            .split(',')
+            .map(|v| v.to_string())
+            .collect::<Vec<String>>();
 
         // wait on all handles to finish
         levelcrush::futures::future::join_all(handles).await;

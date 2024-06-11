@@ -2,6 +2,7 @@ use crate::app;
 use crate::app::extension::AccountExtension;
 use crate::app::session::SessionKey;
 use crate::routes::platform::{OAuthLoginQueries, OAuthLoginValidationQueries};
+use crate::routes::responses::DiscordGuild;
 use axum::extract::{Query, State};
 use axum::response::Redirect;
 use axum::routing::get;
@@ -32,7 +33,7 @@ pub async fn login(
 
     let client_id = state.extension.discord_client_id;
     let authorize_redirect = state.extension.discord_validate_url;
-    let scopes = vec!["identify"].join("+");
+    let scopes = vec!["identify", "guilds"].join("+");
 
     let hash_input = md5::compute(format!("{}||{}", client_id, unix_timestamp()));
     let discord_state = format!("{:x}", hash_input);
@@ -46,18 +47,10 @@ pub async fn login(
     );
 
     // store discord state check and final redirect in session
-    app::session::write(
-        SessionKey::PlatformDiscordState,
-        discord_state,
-        &mut session,
-    );
+    app::session::write(SessionKey::PlatformDiscordState, discord_state, &mut session);
 
     // store original url that this route was called from
-    app::session::write(
-        SessionKey::PlatformDiscordCallerUrl,
-        final_redirect,
-        &mut session,
-    );
+    app::session::write(SessionKey::PlatformDiscordCallerUrl, final_redirect, &mut session);
 
     // Now redirect
     Redirect::temporary(authorize_url.as_str())
@@ -73,13 +66,12 @@ pub async fn validate(
     let fallback_url = state.extension.fallback_url.clone();
     let final_fallback_url = fallback_url;
 
-    let final_redirect = app::session::read(SessionKey::PlatformDiscordCallerUrl, &session)
-        .unwrap_or(final_fallback_url);
+    let mut final_redirect =
+        app::session::read(SessionKey::PlatformDiscordCallerUrl, &session).unwrap_or(final_fallback_url);
 
     let mut do_process = true;
     let validation_state = query_fields.state.unwrap_or_default();
-    let session_state = app::session::read::<String>(SessionKey::PlatformDiscordState, &session)
-        .unwrap_or_default();
+    let session_state = app::session::read::<String>(SessionKey::PlatformDiscordState, &session).unwrap_or_default();
 
     let oauth_code = query_fields.code.unwrap_or_default();
     let oauth_error = query_fields.error.unwrap_or_default();
@@ -87,10 +79,7 @@ pub async fn validate(
     // make sure we don't have an error and we have a code that we can check
     if !oauth_error.is_empty() {
         do_process = false;
-        tracing::warn!(
-            "There was an error found in the oauth request {}",
-            oauth_error
-        );
+        tracing::warn!("There was an error found in the oauth request {}", oauth_error);
     }
 
     if oauth_code.is_empty() {
@@ -114,21 +103,37 @@ pub async fn validate(
 
     // now validate the code returned to us if we are allowed to process
     let validation_response = app::discord::validate_oauth(&oauth_code, &state).await;
+    let mut access_token = String::new();
     let member_sync = if let Some(validation) = validation_response {
-        app::discord::member_oauth(&validation.access_token, &state).await
+        access_token = validation.access_token.to_string();
+        app::discord::member_oauth(&access_token, &state).await
     } else {
         None
     };
 
-    if let Some(member) = member_sync {
-        app::session::login(&mut session, member);
-    }
+    // now get the list of guilds they are in and if they have at least one of the guild ids in the allowed server list then we are in good shape
+    let is_allowed = if let Some(member) = &member_sync {
+        let discord_guilds = app::discord::member_oauth_guilds_api(&access_token, &state).await;
+        discord_guilds
+            .into_iter()
+            .any(|g| state.extension.allowed_discords.contains(&g.id))
+    } else {
+        false
+    };
 
-    let discord_username =
-        app::session::read::<String>(SessionKey::Username, &session).unwrap_or_default();
-    let search_cache_key = format!("search_discord||{}", discord_username);
-    tracing::info!("Busting search key: {}", search_cache_key);
-    state.extension.searches.delete(&search_cache_key).await;
+    if is_allowed {
+        if let Some(member) = member_sync {
+            app::session::login(&mut session, member);
+        }
+
+        let discord_username = app::session::read::<String>(SessionKey::Username, &session).unwrap_or_default();
+        let search_cache_key = format!("search_discord||{}", discord_username);
+        tracing::info!("Busting search key: {}", search_cache_key);
+        state.extension.searches.delete(&search_cache_key).await;
+    } else {
+        let param_type = if final_redirect.contains("?") { "&" } else { "?" };
+        final_redirect = format!("{final_redirect}{param_type}error=NotAllowed")
+    }
 
     // no matter what we redirect back to our caller
     Redirect::temporary(final_redirect.as_str())
