@@ -75,7 +75,11 @@ impl MigrationTrait for Migration {
                             .primary_key()
                             .auto_increment(),
                     )
-                    .col(ColumnDef::new(AccountPlatforms::Platform).string_len(32).not_null())
+                    .col(
+                        ColumnDef::new(AccountPlatforms::Platform)
+                            .string_len(32)
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(AccountPlatforms::Account)
                             .big_integer()
@@ -118,7 +122,7 @@ impl MigrationTrait for Migration {
                     )
                     .index(
                         Index::create()
-                             .if_not_exists()
+                            .if_not_exists()
                             .table(AccountPlatforms::Table)
                             .name("accountplatforms-platform")
                             .col(AccountPlatforms::Platform),
@@ -187,7 +191,8 @@ impl MigrationTrait for Migration {
                             .table(AccountPlatformData::Table)
                             .col(AccountPlatformData::Account)
                             .col(AccountPlatformData::Platform)
-                            .col(AccountPlatformData::Key),
+                            .col(AccountPlatformData::Key)
+                            .unique(),
                     )
                     .index(
                         Index::create()
