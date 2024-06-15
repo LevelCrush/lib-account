@@ -2,9 +2,8 @@ use levelcrush::app::ApplicationState;
 use levelcrush::project_str;
 use levelcrush::{database, md5, util::unix_timestamp};
 use sea_orm::{
-    self, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseBackend, EntityTrait,
-    FromQueryResult, JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Select,
-    Statement, Value, Values,
+    self, ActiveModelTrait, ActiveValue, ColumnTrait, Condition, DatabaseBackend, EntityTrait, FromQueryResult,
+    JoinType, QueryFilter, QueryOrder, QuerySelect, RelationTrait, Select, Statement, Value, Values,
 };
 use std::collections::HashMap;
 
@@ -23,18 +22,14 @@ pub struct AccountLinkedPlatformsResult {
 #[derive(Clone, Debug, Default, serde::Serialize, FromQueryResult)]
 pub struct AccountLinkedPlatformDataResult {
     pub platform: String,
-    pub platform_user: i64,
+    pub platform_user: String,
     pub key: String,
     pub value: String,
 }
 
 pub type Account = accounts::Model;
 
-pub async fn get(
-    token: &str,
-    token_secret: &str,
-    state: &ApplicationState<AccountExtension>,
-) -> Option<Account> {
+pub async fn get(token: &str, token_secret: &str, state: &ApplicationState<AccountExtension>) -> Option<Account> {
     let model = accounts::Entity::find()
         .filter(
             Condition::all()
@@ -111,10 +106,7 @@ pub async fn all_data(
             JoinType::InnerJoin,
             account_platform_data::Relation::AccountPlatforms.def(),
         )
-        .join(
-            JoinType::InnerJoin,
-            account_platform_data::Relation::Accounts.def(),
-        )
+        .join(JoinType::InnerJoin, account_platform_data::Relation::Accounts.def())
         .filter(Condition::all().add(account_platform_data::Column::Account.eq(account.id)))
         .order_by_asc(account_platforms::Column::Platform)
         .order_by_asc(account_platforms::Column::Id)
@@ -131,11 +123,9 @@ pub async fn all_data(
                 results.insert(index.clone(), HashMap::new());
             }
 
-            results
-                .entry(index)
-                .and_modify(|item: &mut HashMap<String, String>| {
-                    item.insert(record.key, record.value);
-                });
+            results.entry(index).and_modify(|item: &mut HashMap<String, String>| {
+                item.insert(record.key, record.value);
+            });
         }
     } else {
         database::log_error(query_results);
